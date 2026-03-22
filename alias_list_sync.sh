@@ -13,7 +13,7 @@ RSPAMD_POLICY_FILE="/etc/rspamd/list_policies.json"
 TMP_OUTPUT="${RSPAMD_POLICY_FILE}.tmp"
 
 # Allowed policy values
-VALID_POLICIES=("public" "domain" "members" "moderators" "membersandmoderators")
+VALID_POLICIES=("public" "domain" "membersonly" "moderatorsonly" "membersandmoderatorsonly")
 
 # Fetch aliases from Mailcow API
 response=$(curl -sS -H "accept: application/json" -H "X-API-Key: $MAILCOW_API_KEY" "http://$MAILCOW_HOSTNAME/api/v1/get/alias/all") || {
@@ -27,7 +27,7 @@ if ! echo "$response" | jq empty 2>/dev/null || [[ ! "$response" =~ ^\[ ]]; then
 fi
 
 # Valid policies list as a jq-friendly string
-valid_policies='["public","domain","members","moderators","membersandmoderators"]'
+valid_policies='["public","domain","membersonly","moderatorsonly","membersandmoderatorsonly"]'
 
 # Build the output JSON using jq
 json=$(echo "$response" | jq --argjson valid "$valid_policies" '

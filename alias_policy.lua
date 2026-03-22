@@ -71,15 +71,15 @@ local function check_policy(task)
         if sender_domain ~= list_domain then
           reject(task, sender, list_addr, "Sender not in same domain")
         end
-      elseif policy == "members" then
+      elseif policy == "membersonly" then
         if not list.members[sender] then
           reject(task, sender, list_addr, "Sender not a member")
         end
-      elseif policy == "moderators" then
+      elseif policy == "moderatorsonly" then
         if not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a moderator")
         end
-      elseif policy == "membersandmoderators" then
+      elseif policy == "membersandmoderatorsonly" then
         if not list.members[sender] and not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a member or moderator")
         end
