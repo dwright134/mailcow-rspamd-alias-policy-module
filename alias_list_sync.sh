@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Generate Rspamd JSON policy from Mailcow API (env-configured)
+set -euo pipefail
+
+# Load env file if exists (optional)
+[[ -f "/etc/mailcow.env" ]] && source /etc/mailcow.env
+
+# Ensure required env vars are set
+: "${MAILCOW_HOSTNAME:?MAILCOW_API_DOMAIN must be set}"
+: "${MAILCOW_API_KEY:?MAILCOW_API_KEY must be set}"
+
+RSPAMD_POLICY_FILE="/etc/rspamd/list_policies.json"
+TMP_OUTPUT="${RSPAMD_POLICY_FILE}.tmp"
+
+# Allowed policy values
+VALID_POLICIES=("public" "domain" "members" "moderators" "membersandmoderators")
+
+# Fetch aliases from Mailcow API
+response=$(curl -sS -H "accept: application/json" -H "X-API-Key: $MAILCOW_API_KEY" "http://$MAILCOW_HOSTNAME/api/v1/get/alias/all") || {
+  echo "Error: Mailcow API request failed"
+  exit 1
+}
+# Validate response
+if ! echo "$response" | jq empty 2>/dev/null || [[ ! "$response" =~ ^\[ ]]; then
+  echo "Error: API did not return a valid JSON array"
+  exit 1
+fi
+
+# Valid policies list as a jq-friendly string
+valid_policies='["public","domain","members","moderators","membersandmoderators"]'
+
+# Build the output JSON using jq
+json=$(echo "$response" | jq --argjson valid "$valid_policies" '
+  [.[] | select(.active == 1)] |
+  map(
+    {
+      key: (.address | ascii_downcase),
+      value: {
+        policy: (
+          (.private_comment // "" | ascii_downcase) as $p |
+          if ($valid | index($p)) then $p else "public" end
+        ),
+        members: (
+          (.goto // "") |
+          if . == "" then []
+          else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
+          end
+        ),
+        moderators: (
+          (.public_comment // "") |
+          if . == "" then []
+          else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
+          end
+        )
+      }
+    }
+  ) | from_entries
+')
+
+# Only update file if different
+if [[ -f "$RSPAMD_POLICY_FILE" ]] && cmp -s <(echo "$json") "$RSPAMD_POLICY_FILE"; then
+  echo "No changes detected. Not updating $RSPAMD_POLICY_FILE."
+  exit 0
+fi
+
+# Atomic write
+echo "$json" >"$TMP_OUTPUT"
+mv "$TMP_OUTPUT" "$RSPAMD_POLICY_FILE"
+echo "Rspamd policy JSON updated at $RSPAMD_POLICY_FILE"
