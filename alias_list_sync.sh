@@ -35,24 +35,31 @@ json=$(echo "$response" | jq --argjson valid "$valid_policies" '
   map(
     {
       key: (.address | ascii_downcase),
-      value: {
-        policy: (
-          (.private_comment // "" | ascii_downcase) as $p |
-          if ($valid | index($p)) then $p else "public" end
-        ),
-        members: (
-          (.goto // "") |
-          if . == "" then []
-          else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
-          end
-        ),
-        moderators: (
-          (.public_comment // "") |
-          if . == "" then []
-          else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
-          end
-        )
-      }
+      value: (
+        (.private_comment // "" | ascii_downcase) as $raw |
+        ($raw | split("::")) as $parts |
+        ($parts[0] // "") as $p |
+        {
+          policy: (
+            if ($valid | index($p)) then $p else "public" end
+          ),
+          members: (
+            (.goto // "") |
+            if . == "" then []
+            else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
+            end
+          ),
+          moderators: (
+            if ($parts | length) > 1 then
+              ($parts[1] // "") |
+              if . == "" then []
+              else split(",") | map(gsub("^\\s+|\\s+$"; "") | ascii_downcase) | map(select(. != ""))
+              end
+            else []
+            end
+          )
+        }
+      )
     }
   ) | from_entries
 ')
