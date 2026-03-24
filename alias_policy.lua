@@ -3,6 +3,7 @@ local ucl = require("ucl")
 
 local policy_file = "/etc/rspamd/list_policies.json"
 local policies = {}
+local last_load = 0
 
 local function list_to_set(list)
   local set = {}
@@ -42,10 +43,6 @@ local function load_policies()
 end
 
 load_policies()
-rspamd_config.add_periodic(rspamd_config, 60.0, function()
-  load_policies()
-  return true
-end)
 
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "Sender rejected: %s -> %s (%s)", sender, list_addr, msg)
@@ -53,6 +50,12 @@ local function reject(task, sender, list_addr, msg)
 end
 
 local function check_policy(task)
+  local now = os.time()
+  if now - last_load >= 60 then
+    last_load = now
+    load_policies()
+  end
+
   local sender = task:get_from("smtp")
   local rcpts = task:get_recipients("smtp")
   if not sender or not rcpts then
