@@ -42,7 +42,10 @@ local function load_policies()
 end
 
 load_policies()
-rspamd_config:add_periodic(60.0, load_policies)
+rspamd_config:add_periodic(60.0, function()
+  load_policies()
+  return true
+end)
 
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "Sender rejected: %s -> %s (%s)", sender, list_addr, msg)
