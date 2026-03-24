@@ -30,6 +30,6 @@ fi
 
 # Create an env file for the sync script
 cat <<EOF >/etc/alias_list_sync.env
-MAILCOW_API_KEY=${API_KEY}
+MAILCOW_API_KEY=${API_KEY_READ_ONLY}
 MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
 EOF
