@@ -18,7 +18,7 @@ end
 local function load_policies()
   local f = io.open(policy_file, "r")
   if not f then
-    rspamd_logger.warnx(rspamd_config, "Cannot open policy file: %s", policy_file)
+    rspamd_logger.warnx("Cannot open policy file: %s", policy_file)
     return
   end
   local data = f:read("*all")
@@ -27,7 +27,7 @@ local function load_policies()
   local parser = ucl.parser()
   local ok, err = parser:parse_string(data)
   if not ok then
-    rspamd_logger.errx(rspamd_config, "Failed to parse %s: %s", policy_file, err)
+    rspamd_logger.errx("Failed to parse %s: %s", policy_file, err)
     return
   end
   local raw = parser:get_object()
@@ -96,8 +96,7 @@ local function check_policy(task)
   end
 end
 
-rspamd_config.register_symbol({
-  name = "ALIAS_POLICY",
+rspamd_config.ALIAS_POLICY = {
   type = "prefilter",
   callback = check_policy,
-})
+}
