@@ -42,7 +42,7 @@ local function load_policies()
 end
 
 load_policies()
-rspamd_config:add_periodic(60.0, function()
+rspamd_config.add_periodic(rspamd_config, 60.0, function()
   load_policies()
   return true
 end)
@@ -93,7 +93,7 @@ local function check_policy(task)
   end
 end
 
-rspamd_config:register_symbol({
+rspamd_config.register_symbol({
   name = "ALIAS_POLICY",
   type = "prefilter",
   callback = check_policy,
