@@ -1,6 +1,6 @@
 # Mailcow Rspamd Alias Policy Module
 
-A lightweight mailing list policy enforcement system for [Mailcow](https://mailcow.email/). It uses Mailcow's alias `private_comment` field to define sending policies, and enforces them via an [Rspamd](https://rspamd.com/) Lua prefilter.
+A lightweight mailing list policy enforcement system for [Mailcow](https://mailcow.email/). Created to fill a gap when migrating from [iRedMail](https://www.iredmail.org/), which provides alias ACLs through its `policyserver` -- a feature missing in Mailcow. It uses Mailcow's alias `private_comment` field to define sending policies, and enforces them via an [Rspamd](https://rspamd.com/) Lua prefilter.
 
 ## How It Works
 
