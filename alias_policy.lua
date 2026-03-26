@@ -2,8 +2,9 @@ local rspamd_logger = require("rspamd_logger")
 local ucl = require("ucl")
 
 local policy_file = "/etc/rspamd/list_policies.json"
+local sync_script = "/usr/local/bin/alias_list_sync.sh"
 local policies = {}
-local last_load = 0
+local last_sync = 0
 
 local function list_to_set(list)
   local set = {}
@@ -13,6 +14,15 @@ local function list_to_set(list)
     end
   end
   return set
+end
+
+local function sync_policies()
+  local now = os.time()
+  if now - last_sync < 60 then
+    return
+  end
+  last_sync = now
+  os.execute(sync_script)
 end
 
 local function load_policies()
@@ -42,6 +52,7 @@ local function load_policies()
   end
 end
 
+sync_policies()
 load_policies()
 
 local function reject(task, sender, list_addr, msg)
@@ -50,11 +61,8 @@ local function reject(task, sender, list_addr, msg)
 end
 
 local function check_policy(task)
-  local now = os.time()
-  if now - last_load >= 60 then
-    last_load = now
-    load_policies()
-  end
+  sync_policies()
+  load_policies()
 
   local sender = task:get_from("smtp")
   local rcpts = task:get_recipients("smtp")

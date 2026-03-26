@@ -5,10 +5,10 @@ set -e
 cp /hooks/alias_list_sync.sh /usr/local/bin/alias_list_sync.sh
 chmod +x /usr/local/bin/alias_list_sync.sh
 
-mkdir -p /etc/cron.d
-# Create a cron entry to run the alias list sync script every 5 minutes
-cat <<EOF >/etc/cron.d/alias_list_sync
-*/5 * * * * source /etc/alias_list_sync.env && /usr/local/bin/alias_list_sync.sh
+# Create an env file for the sync script
+cat <<EOF >/etc/alias_list_sync.env
+MAILCOW_API_KEY=${API_KEY_READ_ONLY}
+MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
 EOF
 
 # Initialize the policy file as empty JSON if it doesn't exist yet
@@ -27,9 +27,3 @@ alias_policy {
 }
 EOF
 fi
-
-# Create an env file for the sync script
-cat <<EOF >/etc/alias_list_sync.env
-MAILCOW_API_KEY=${API_KEY_READ_ONLY}
-MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
-EOF

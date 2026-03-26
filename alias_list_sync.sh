@@ -2,8 +2,8 @@
 # Generate Rspamd JSON policy from Mailcow API (env-configured)
 set -euo pipefail
 
-# Load env file if exists (optional)
-[[ -f "/etc/mailcow.env" ]] && source /etc/mailcow.env
+# Load env file if exists
+[[ -f "/etc/alias_list_sync.env" ]] && source /etc/alias_list_sync.env
 
 # Ensure required env vars are set
 : "${MAILCOW_HOSTNAME:?MAILCOW_API_DOMAIN must be set}"
