@@ -110,12 +110,7 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
          environment:
            - MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
            - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
-     ```
-
-   - Apply the override:
-     ```bash
-     docker compose up -d
-     ```
+      ```
 
 2. Run the setup script:
 
