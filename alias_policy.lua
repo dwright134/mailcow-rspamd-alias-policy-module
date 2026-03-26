@@ -4,7 +4,7 @@
 -- field and synced via alias_list_sync.sh to list_policies.json.
 
 -- Rspamd modules
-local rspamd_logger = require("rspamdLogger")
+local rspamd_logger = require("rspamd_logger")
 local ucl = require("ucl")
 
 -- Configuration
