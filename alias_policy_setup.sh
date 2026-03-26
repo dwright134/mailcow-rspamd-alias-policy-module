@@ -2,7 +2,7 @@
 set -e
 
 # Install curl
-apt-get update && apt-get install -y --no-install-recommends curl &&
+apt-get update && apt-get install -y --no-install-recommends curl jq &&
   rm -rf /var/lib/apt/lists/*
 
 # Copy the alias list sync script and make it executable
