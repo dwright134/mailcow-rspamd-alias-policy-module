@@ -21,7 +21,7 @@ mkdir -p /etc/rspamd/plugins.d
 cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
 # Add a configuration block so rspamd does not auto-disable the module
-if ! grep -q 'alias_policy' /etc/rspamd/rspamd.conf.local 2>/dev/null; then
+if ! grep -q 'alias_policy' /etc/rspamd/rspamd.conf.local >/dev/null 2>&1; then
   cat <<EOF >>/etc/rspamd/rspamd.conf.local
 alias_policy {
 }

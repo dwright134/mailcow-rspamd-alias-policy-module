@@ -6,7 +6,7 @@ set -euo pipefail
 [[ -f "/etc/alias_list_sync.env" ]] && source /etc/alias_list_sync.env
 
 # Ensure required env vars are set
-: "${MAILCOW_HOSTNAME:?MAILCOW_API_DOMAIN must be set}"
+: "${MAILCOW_HOSTNAME:?MAILCOW_HOSTNAME must be set}"
 : "${MAILCOW_API_KEY:?MAILCOW_API_KEY must be set}"
 
 RSPAMD_POLICY_FILE="/etc/rspamd/list_policies.json"
