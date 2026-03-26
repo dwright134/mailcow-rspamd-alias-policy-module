@@ -16,12 +16,12 @@ TMP_OUTPUT="${RSPAMD_POLICY_FILE}.tmp"
 VALID_POLICIES=("public" "domain" "membersonly" "moderatorsonly" "membersandmoderatorsonly")
 
 # Fetch aliases from Mailcow API
-response=$(curl -sS -H "accept: application/json" -H "X-API-Key: $MAILCOW_API_KEY" "http://$MAILCOW_HOSTNAME/api/v1/get/alias/all") || {
+response=$(curl -sS -H "accept: application/json" -H "X-API-Key: $MAILCOW_API_KEY" "https://$MAILCOW_HOSTNAME/api/v1/get/alias/all") || {
   echo "Error: Mailcow API request failed"
   exit 1
 }
 # Validate response
-if ! echo "$response" | jq empty 2>/dev/null || [[ ! "$response" =~ ^\[ ]]; then
+if ! echo "$response" | jq empty 2>/dev/null && [[ ! "$response" =~ ^\[ ]]; then
   echo "Error: API did not return a valid JSON array"
   exit 1
 fi
