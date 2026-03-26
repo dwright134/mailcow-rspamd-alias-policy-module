@@ -95,29 +95,48 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
 ## Installation
 
-1. Set the required environment variables:
-   - `MAILCOW_HOSTNAME` -- Your Mailcow hostname (e.g., `mail.example.com`)
-   - `API_KEY_READ_ONLY` -- A Mailcow read-only API key
+1. Set up the environment variables:
+
+   - Add your read-only API key to `mailcow.conf` in your mailcow-dockerized directory:
+     ```
+     API_KEY_READ_ONLY=<your-read-only-api-key>
+     ```
+     (`MAILCOW_HOSTNAME` is already set in `mailcow.conf`.)
+
+   - Create `docker-compose.override.yml` in your mailcow-dockerized directory to inject variables into the rspamd container:
+     ```yaml
+     services:
+       rspamd-mailcow:
+         environment:
+           - MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
+           - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
+     ```
+
+   - Apply the override:
+     ```bash
+     docker compose up -d
+     ```
 
 2. Run the setup script:
+
+   The setup script (`alias_policy_setup.sh`) runs automatically when the rspamd container starts. After setting up the environment variables and applying the override, restart the container to trigger the setup:
+
    ```bash
-   ./alias_policy_setup.sh
+   docker compose restart rspamd-mailcow
    ```
 
-   This will:
+   The setup script will:
    - Copy `alias_list_sync.sh` to `/usr/local/bin/`
    - Create an env file at `/etc/alias_list_sync.env`
    - Install `alias_policy.lua` into Rspamd's plugins directory
    - Register the module in `rspamd.conf.local`
 
-3. Restart Rspamd to load the Lua module.
-
 ## Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `MAILCOW_HOSTNAME` | Yes | Hostname of the Mailcow instance (used for API requests) |
-| `API_KEY_READ_ONLY` | Yes | Read-only API key for authenticating with the Mailcow API |
+| `MAILCOW_HOSTNAME` | Yes | Hostname of the Mailcow instance (already set in `mailcow.conf`) |
+| `API_KEY_READ_ONLY` | Yes | Read-only API key, set in `mailcow.conf` |
 
 ## File Locations
 
