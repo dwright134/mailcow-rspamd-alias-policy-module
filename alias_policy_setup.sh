@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Install curl
+apt-get update && apt-get install -y --no-install-recommends curl &&
+  rm -rf /var/lib/apt/lists/*
+
 # Copy the alias list sync script and make it executable
 cp /hooks/alias_list_sync.sh /usr/local/bin/alias_list_sync.sh
 chmod +x /usr/local/bin/alias_list_sync.sh
