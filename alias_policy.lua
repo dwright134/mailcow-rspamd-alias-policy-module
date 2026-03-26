@@ -4,8 +4,8 @@
 -- field and synced via alias_list_sync.sh to list_policies.json.
 
 -- Rspamd modules
-local rspamd_logger = require("rspamd_logger")
-local rspamd_util = require("rspamd_util")
+local rspamd_logger = require("rspamdLogger")
+local ucl = require("ucl")
 
 -- Configuration
 local policy_file = "/etc/rspamd/list_policies.json"  -- JSON file written by sync script
@@ -40,6 +40,7 @@ local function sync_policies()
 end
 
 -- Reads the policy JSON file and populates the in-memory policies table.
+-- Uses UCL parser which can parse JSON (a subset of UCL).
 -- Each entry maps an alias address to its policy, members, and moderators.
 local function load_policies()
   local f = io.open(policy_file, "r")
@@ -50,11 +51,13 @@ local function load_policies()
   local data = f:read("*all")
   f:close()
 
-  local raw, err = rspamd_util.json_decode(data)
-  if not raw then
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(data)
+  if not ok then
     rspamd_logger.errx("alias_policy: failed to parse %s: %s", policy_file, err)
     return
   end
+  local raw = parser:get_object()
 
   local count = 0
   policies = {}
