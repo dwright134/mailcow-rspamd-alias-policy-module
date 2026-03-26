@@ -110,17 +110,19 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
          environment:
            - MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
            - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
-      ```
+     ```
 
-2. Run the setup script:
+2. Copy the module files into mailcow:
 
-   The setup script (`alias_policy_setup.sh`) runs automatically when the rspamd container starts. After setting up the environment variables and applying the override, restart the container to trigger the setup:
+   Copy the contents of this repo to `mailcow-dockerized/data/hooks/rspamd/`.
+
+3. Restart mailcow:
 
    ```bash
-   docker compose restart rspamd-mailcow
+   docker compose restart
    ```
 
-   The setup script will:
+   This applies the environment variables and triggers the setup script (`alias_policy_setup.sh`) which will:
    - Copy `alias_list_sync.sh` to `/usr/local/bin/`
    - Create an env file at `/etc/alias_list_sync.env`
    - Install `alias_policy.lua` into Rspamd's plugins directory
