@@ -25,7 +25,7 @@ local settings = {
   api_key = nil,
   hostname = nil,
   sync_interval = 300,           -- seconds between API syncs
-  policy_file = "/etc/rspamd/list_policies.json",  -- policy file watched by map
+  policy_file = "/etc/rspamd/local.d/list_policies.json",  -- policy file watched by map
 }
 
 -- Valid policy values
@@ -118,7 +118,7 @@ local function parse_aliases(aliases)
   local count = 0
 
   for _, alias in ipairs(aliases) do
-    if alias.active == 1 then
+    if tonumber(alias.active) == 1 then
       local address = (alias.address or ""):lower()
       if address ~= "" then
         local raw_comment = (alias.private_comment or ""):lower()
@@ -248,12 +248,6 @@ local function sync_from_api(cfg, ev_base)
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
           aliases = { aliases }
-        end
-
-        -- Debug: check first alias structure
-        if aliases[1] then
-          rspamd_logger.errx(rspamd_config, "%s: first alias: active=%s (%s), address=%s", N, 
-            tostring(aliases[1].active), type(aliases[1].active), tostring(aliases[1].address))
         end
 
         local policy_data, count = parse_aliases(aliases)
