@@ -250,6 +250,12 @@ local function sync_from_api(cfg, ev_base)
           aliases = { aliases }
         end
 
+        -- Debug: check first alias structure
+        if aliases[1] then
+          rspamd_logger.errx(rspamd_config, "%s: first alias: active=%s (%s), address=%s", N, 
+            tostring(aliases[1].active), type(aliases[1].active), tostring(aliases[1].address))
+        end
+
         local policy_data, count = parse_aliases(aliases)
         if not policy_data then
           rspamd_logger.errx(rspamd_config, "%s: failed to process aliases: %s", N, count)
