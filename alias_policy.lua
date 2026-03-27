@@ -71,7 +71,7 @@ load_policies()
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "alias_policy: REJECT %s -> %s (%s)", sender, list_addr, msg)
   task:insert_result("ALIAS_POLICY", 1.0, list_addr)
-  task:set_pre_result("reject", msg)
+  task:set_pre_result("reject", msg, false, false, {symbol = "ALIAS_POLICY"})
   return true
 end
 
