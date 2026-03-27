@@ -224,33 +224,40 @@ local function sync_from_api(cfg, ev_base)
 
       rspamd_logger.errx(rspamd_config, "%s: received API response (%s bytes)", N, #body_str)
 
-      -- Parse JSON response
-      local parser = ucl.parser()
-      local ok, parse_err = parser:parse_string(body_str)
+      rspamd_logger.errx(rspamd_config, "%s: body preview: %s", N, body_str:sub(1, 200))
+
+      -- Parse JSON response and process aliases
+      local ok, err = pcall(function()
+        local parser = ucl.parser()
+        local parse_ok, parse_err = parser:parse_string(body_str)
+        if not parse_ok then
+          rspamd_logger.errx(rspamd_config, "%s: failed to parse API response: %s", N, parse_err)
+          return
+        end
+
+        local aliases = parser:get_object()
+        if not aliases then
+          rspamd_logger.errx(rspamd_config, "%s: UCL parsed to nil", N)
+          return
+        end
+
+        -- Normalize: single object -> array
+        if aliases[1] == nil and aliases.address then
+          aliases = { aliases }
+        end
+
+        local policy_data, count = parse_aliases(aliases)
+        if not policy_data then
+          rspamd_logger.errx(rspamd_config, "%s: failed to process aliases: %s", N, count)
+          return
+        end
+
+        rspamd_logger.errx(rspamd_config, "%s: parsed %s policies from API", N, count)
+        save_policy_file(policy_data)
+      end)
       if not ok then
-        rspamd_logger.errx(rspamd_config, "%s: failed to parse API response: %s", N, parse_err)
-        return
+        rspamd_logger.errx(rspamd_config, "%s: error processing API response: %s", N, tostring(err))
       end
-
-      local aliases = parser:get_object()
-      if not aliases then
-        rspamd_logger.errx(rspamd_config, "%s: UCL parsed to nil", N)
-        return
-      end
-
-      -- Normalize: single object -> array
-      if aliases[1] == nil and aliases.address then
-        aliases = { aliases }
-      end
-
-      local policy_data, count = parse_aliases(aliases)
-      if not policy_data then
-        rspamd_logger.errx(rspamd_config, "%s: failed to process aliases: %s", N, count)
-        return
-      end
-
-      rspamd_logger.errx(rspamd_config, "%s: parsed %s policies from API", N, count)
-      save_policy_file(policy_data)
     end,
   })
 end
