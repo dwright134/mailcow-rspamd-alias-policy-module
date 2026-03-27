@@ -149,7 +149,8 @@ local function check_policy(task)
 end
 
 -- Register as a prefilter (runs before all other Rspamd filters)
-rspamd_config.ALIAS_POLICY = {
-  type = "prefilter",
+rspamd_config:register_symbol({
+  name = 'ALIAS_POLICY',
+  type = 'prefilter',
   callback = check_policy,
-}
+})
