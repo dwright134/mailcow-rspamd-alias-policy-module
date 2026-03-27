@@ -10,14 +10,16 @@ fi
 mkdir -p /etc/rspamd/plugins.d
 cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
-# Add configuration block with API credentials so the Lua module can
-# fetch aliases directly from the Mailcow API (no external scripts needed)
-if ! grep -q 'alias_policy' /etc/rspamd/rspamd.conf.local >/dev/null 2>&1; then
-  cat <<EOF >>/etc/rspamd/rspamd.conf.local
+# Remove any existing alias_policy block (may be stale or from an older version)
+# then write a fresh one with the current credentials
+if [ -f /etc/rspamd/rspamd.conf.local ]; then
+  sed -i '/^alias_policy[[:space:]]*{/,/^}/d' /etc/rspamd/rspamd.conf.local
+fi
+
+cat <<EOF >>/etc/rspamd/rspamd.conf.local
 alias_policy {
   api_key = "${API_KEY_READ_ONLY}";
   hostname = "${MAILCOW_HOSTNAME}";
   sync_interval = 300;
 }
 EOF
-fi
