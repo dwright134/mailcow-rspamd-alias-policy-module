@@ -296,11 +296,16 @@ if not policy_map then
 end
 
 -------------------------------------------------------------------
--- Periodic API sync: only the controller worker fetches from
+-- Periodic API sync: only the primary controller fetches from
 -- the API and writes the file. Scanner workers just read via map.
 -------------------------------------------------------------------
-rspamd_config:register_worker_script("controller", function(cfg, ev_base, worker)
-  rspamd_logger.infox(cfg, "%s: controller worker starting API sync (interval=%ss)", N, settings.sync_interval)
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if not worker:is_primary_controller() then
+    rspamd_logger.infox(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
+    return
+  end
+
+  rspamd_logger.infox(rspamd_config, "%s: primary controller starting API sync (interval=%ss)", N, settings.sync_interval)
 
   -- First sync immediately
   sync_from_api(cfg, ev_base)
