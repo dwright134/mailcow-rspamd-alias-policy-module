@@ -245,20 +245,12 @@ local function sync_from_api(cfg, ev_base)
           return
         end
 
-        -- Convert opaque UCL object to JSON string, then re-parse as native Lua table
-        -- (get_object() may return userdata instead of tables in some rspamd versions)
-        local json_str = obj:tostring()
-        local parser2 = ucl.parser()
-        local re_ok, re_err = parser2:parse_string(json_str)
-        if not re_ok then
-          rspamd_logger.errx(rspamd_config, "%s: failed to re-parse JSON: %s", N, re_err)
-          return
-        end
-        local aliases = parser2:get_object()
-        if not aliases then
-          rspamd_logger.errx(rspamd_config, "%s: re-parsed to nil", N)
-          return
-        end
+        -- Debug: check what type obj is and what tostring produces
+        rspamd_logger.errx(rspamd_config, "%s: obj type=%s, tostring=%s", N, type(obj), tostring(obj):sub(1, 100))
+
+        -- Convert opaque UCL object to JSON string using tostring method
+        local json_str = obj:tostring("json-compact")
+        rspamd_logger.errx(rspamd_config, "%s: json_str preview: %s", N, (json_str or "nil"):sub(1, 200))
 
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
