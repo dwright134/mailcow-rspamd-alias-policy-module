@@ -71,7 +71,7 @@ load_policies()
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "alias_policy: REJECT %s -> %s (%s)", sender, list_addr, msg)
   task:insert_result("ALIAS_POLICY", 1.0, list_addr)
-  task:set_pre_result("reject", msg, false, false, {symbol = "ALIAS_POLICY"})
+  task:set_pre_result("reject", msg)
   return true
 end
 
@@ -150,9 +150,15 @@ local function check_policy(task)
   end
 end
 
--- Register as a prefilter (runs before all other Rspamd filters)
+-- Register symbol for logging/identification
 rspamd_config:register_symbol({
   name = 'ALIAS_POLICY',
-  type = 'prefilter',
-  callback = check_policy,
+  score = 0,
+  type = 'virtual'
 })
+
+-- Register as a prefilter (runs before all other Rspamd filters)
+rspamd_config.ALIAS_POLICY = {
+  type = "prefilter",
+  callback = check_policy,
+}
