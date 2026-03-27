@@ -239,18 +239,13 @@ local function sync_from_api(cfg, ev_base)
           return
         end
 
-        local obj = parser:get_object_wrapped()
-        if not obj then
+        local aliases = parser:get_object_wrapped()
+        if not aliases then
           rspamd_logger.errx(rspamd_config, "%s: UCL parsed to nil", N)
           return
         end
 
-        -- Debug: check what type obj is and what tostring produces
-        rspamd_logger.errx(rspamd_config, "%s: obj type=%s, tostring=%s", N, type(obj), tostring(obj):sub(1, 100))
-
-        -- Convert opaque UCL object to JSON string using tostring method
-        local json_str = obj:tostring("json-compact")
-        rspamd_logger.errx(rspamd_config, "%s: json_str preview: %s", N, (json_str or "nil"):sub(1, 200))
+        rspamd_logger.errx(rspamd_config, "%s: aliases type=%s", N, type(aliases))
 
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
