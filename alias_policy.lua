@@ -109,21 +109,23 @@ end
 -- Parse raw API response (Lua table from JSON) into a policy map
 -- suitable for writing to the policy file.
 -- Returns output table and count, or nil and error message.
-local function parse_aliases(aliases)
+local function parse_aliases(cfg, aliases)
   if type(aliases) ~= "table" then
     return nil, "expected array of aliases"
   end
+
+  rspamd_logger.errx(cfg, "%s: parse_aliases: got %d items", N, #aliases)
 
   local output = {}
   local count = 0
 
   for _, alias in ipairs(aliases) do
-    rspamd_logger.errx(rspamd_config, "%s: DEBUG: alias.address=%s, active=%s (%s), tonumber=%s", 
+    rspamd_logger.errx(cfg, "%s: DEBUG: alias.address=%s, active=%s (%s), tonumber=%s", 
       N, tostring(alias.address), tostring(alias.active), type(alias.active), tostring(tonumber(alias.active)))
     if tonumber(alias.active) == 1 then
       local address = (alias.address or ""):lower()
       if address ~= "" then
-        rspamd_logger.errx(rspamd_config, "%s: DEBUG: processing alias %s", N, address)
+        rspamd_logger.errx(cfg, "%s: DEBUG: processing alias %s", N, address)
         local raw_comment = (alias.private_comment or ""):lower()
         local parts = split(raw_comment, "::")
         local policy_name = trim(parts[1] or "")
@@ -253,7 +255,7 @@ local function sync_from_api(cfg, ev_base)
           aliases = { aliases }
         end
 
-        local policy_data, count = parse_aliases(aliases)
+        local policy_data, count = parse_aliases(rspamd_config, aliases)
         if not policy_data then
           rspamd_logger.errx(rspamd_config, "%s: failed to process aliases: %s", N, count)
           return
