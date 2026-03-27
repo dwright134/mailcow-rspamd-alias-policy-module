@@ -73,7 +73,7 @@ end
 -------------------------------------------------------------------
 local function on_policy_map_load(data)
   if not data or #data == 0 then
-    rspamd_logger.warnx(rspamd_config, "%s: map callback received empty data", N)
+    rspamd_logger.errx(rspamd_config, "%s: map callback received empty data", N)
     return
   end
 
@@ -97,7 +97,7 @@ local function on_policy_map_load(data)
   end
 
   policies = new_policies
-  rspamd_logger.infox(rspamd_config, "%s: loaded %s policies from map", N, count)
+  rspamd_logger.errx(rspamd_config, "%s: loaded %s policies from map", N, count)
 end
 
 -------------------------------------------------------------------
@@ -183,7 +183,7 @@ local function save_policy_file(policy_data)
   f:write(json_str)
   f:close()
   os.rename(tmp_path, settings.policy_file)
-  rspamd_logger.infox(rspamd_config, "%s: wrote policy file %s", N, settings.policy_file)
+  rspamd_logger.errx(rspamd_config, "%s: wrote policy file %s", N, settings.policy_file)
 end
 
 -- Fetch aliases from Mailcow API and write the policy file.
@@ -222,7 +222,7 @@ local function sync_from_api(cfg, ev_base)
         return
       end
 
-      rspamd_logger.infox(rspamd_config, "%s: received API response (%s bytes)", N, #body_str)
+      rspamd_logger.errx(rspamd_config, "%s: received API response (%s bytes)", N, #body_str)
 
       -- Parse JSON response
       local parser = ucl.parser()
@@ -249,7 +249,7 @@ local function sync_from_api(cfg, ev_base)
         return
       end
 
-      rspamd_logger.infox(rspamd_config, "%s: parsed %s policies from API", N, count)
+      rspamd_logger.errx(rspamd_config, "%s: parsed %s policies from API", N, count)
       save_policy_file(policy_data)
     end,
   })
@@ -300,12 +300,12 @@ end
 -- the API and writes the file. Scanner workers just read via map.
 -------------------------------------------------------------------
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
-  if not worker:is_primary_controller() then
-    rspamd_logger.infox(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
+  if worker:get_type() == 'controller' then
+    rspamd_logger.errx(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
     return
   end
 
-  rspamd_logger.infox(rspamd_config, "%s: primary controller starting API sync (interval=%ss)", N, settings.sync_interval)
+  rspamd_logger.errx(rspamd_config, "%s: primary controller starting API sync (interval=%ss)", N, settings.sync_interval)
 
   -- First sync immediately
   sync_from_api(cfg, ev_base)
@@ -322,7 +322,7 @@ end)
 -------------------------------------------------------------------
 
 local function reject(task, sender, list_addr, msg)
-  rspamd_logger.infox(task, "%s: REJECT %s -> %s (%s)", N, sender, list_addr, msg)
+  rspamd_logger.errx(task, "%s: REJECT %s -> %s (%s)", N, sender, list_addr, msg)
   task:insert_result("ALIAS_POLICY", 1.0, list_addr)
   task:set_pre_result("reject", msg, N)
   return true
@@ -346,10 +346,10 @@ local function check_policy(task)
     local list = policies[list_addr]
     if list then
       local policy = list.policy
-      rspamd_logger.infox(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
+      rspamd_logger.errx(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
 
       if policy == "public" then
-        rspamd_logger.infox(task, "%s: ALLOW %s -> %s (public)", N, sender, list_addr)
+        rspamd_logger.errx(task, "%s: ALLOW %s -> %s (public)", N, sender, list_addr)
         break
       elseif policy == "domain" then
         local list_domain = list_addr:match("@(.+)")
@@ -357,31 +357,31 @@ local function check_policy(task)
           reject(task, sender, list_addr, "Sender not in same domain")
           return
         else
-          rspamd_logger.infox(task, "%s: ALLOW %s -> %s (domain match)", N, sender, list_addr)
+          rspamd_logger.errx(task, "%s: ALLOW %s -> %s (domain match)", N, sender, list_addr)
         end
       elseif policy == "membersonly" then
         if not list.members[sender] then
           reject(task, sender, list_addr, "Sender not a member")
           return
         else
-          rspamd_logger.infox(task, "%s: ALLOW %s -> %s (member)", N, sender, list_addr)
+          rspamd_logger.errx(task, "%s: ALLOW %s -> %s (member)", N, sender, list_addr)
         end
       elseif policy == "moderatorsonly" then
         if not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a moderator")
           return
         else
-          rspamd_logger.infox(task, "%s: ALLOW %s -> %s (moderator)", N, sender, list_addr)
+          rspamd_logger.errx(task, "%s: ALLOW %s -> %s (moderator)", N, sender, list_addr)
         end
       elseif policy == "membersandmoderatorsonly" then
         if not list.members[sender] and not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a member or moderator")
           return
         else
-          rspamd_logger.infox(task, "%s: ALLOW %s -> %s (member/moderator)", N, sender, list_addr)
+          rspamd_logger.errx(task, "%s: ALLOW %s -> %s (member/moderator)", N, sender, list_addr)
         end
       else
-        rspamd_logger.warnx(task, "%s: unknown policy '%s' for %s, defaulting to allow", N, policy, list_addr)
+        rspamd_logger.errx(task, "%s: unknown policy '%s' for %s, defaulting to allow", N, policy, list_addr)
       end
     end
   end
