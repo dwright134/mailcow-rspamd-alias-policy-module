@@ -2,8 +2,8 @@
 set -e
 
 # Initialize the policy file as empty JSON if it doesn't exist yet
-if [ ! -f /etc/rspamd/list_policies.json ]; then
-  echo '{}' >/etc/rspamd/list_policies.json
+if [ ! -f /etc/rspamd/local.d/list_policies.json ]; then
+  echo '{}' >/etc/rspamd/local.d/list_policies.json
 fi
 
 # Install the alias policy module into rspamd's plugins directory
