@@ -17,12 +17,12 @@ VALID_POLICIES=("public" "domain" "membersonly" "moderatorsonly" "membersandmode
 
 # Fetch aliases from Mailcow API
 response=$(curl -sS -H "accept: application/json" -H "X-API-Key: $MAILCOW_API_KEY" "https://$MAILCOW_HOSTNAME/api/v1/get/alias/all") || {
-  echo "Error: Mailcow API request failed"
+  echo "[alias-policy-sync] Error: Mailcow API request failed"
   exit 1
 }
 # Validate response
 if ! echo "$response" | jq empty 2>/dev/null && [[ ! "$response" =~ ^\[ ]]; then
-  echo "Error: API did not return a valid JSON array"
+  echo "[alias-policy-sync] Error: API did not return a valid JSON array"
   exit 1
 fi
 
@@ -66,11 +66,11 @@ json=$(echo "$response" | jq --argjson valid "$valid_policies" '
 
 # Only update file if different
 if [[ -f "$RSPAMD_POLICY_FILE" ]] && cmp -s <(echo "$json") "$RSPAMD_POLICY_FILE"; then
-  echo "No changes detected. Not updating $RSPAMD_POLICY_FILE."
+  echo "[alias-policy-sync] No policy changes detected. Not updating $RSPAMD_POLICY_FILE."
   exit 0
 fi
 
 # Atomic write
 echo "$json" >"$TMP_OUTPUT"
 mv "$TMP_OUTPUT" "$RSPAMD_POLICY_FILE"
-echo "Rspamd policy JSON updated at $RSPAMD_POLICY_FILE"
+echo "[alias-policy-sync] Policy changes detected. Updating $RSPAMD_POLICY_FILE."

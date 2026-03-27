@@ -8,10 +8,9 @@ local rspamd_logger = require("rspamd_logger")
 local ucl = require("ucl")
 
 -- Configuration
-local policy_file = "/etc/rspamd/list_policies.json"  -- JSON file written by sync script
-local sync_script = "/usr/local/bin/alias_list_sync.sh"  -- Fetches policies from Mailcow API
+local policy_file = "/etc/rspamd/list_policies.json"  -- JSON file written by sync daemon
 local policies = {}  -- In-memory policy table (address -> policy data)
-local last_sync = 0  -- Timestamp of last sync (rate-limited to 60s)
+local last_load = 0  -- Timestamp of last file load (rate-limited to 60s)
 
 -- Converts an array of strings into a lookup set (lowercase keys).
 -- Used to quickly check if a sender is in the members or moderators list.
@@ -25,24 +24,17 @@ local function list_to_set(list)
   return set
 end
 
--- Runs the sync script to fetch latest policies from Mailcow API.
--- Rate-limited to once every 60 seconds to avoid excessive API calls.
-local function sync_policies()
-  local now = os.time()
-  if now - last_sync < 60 then
-    return
-  end
-  last_sync = now
-  local rc = os.execute(sync_script .. " >/dev/null 2>&1")
-  if rc ~= 0 then
-    rspamd_logger.errx("alias_policy: sync script failed (exit code %s)", rc)
-  end
-end
-
 -- Reads the policy JSON file and populates the in-memory policies table.
+-- Rate-limited to once every 60 seconds to avoid excessive file I/O.
 -- Uses UCL parser which can parse JSON (a subset of UCL).
 -- Each entry maps an alias address to its policy, members, and moderators.
 local function load_policies()
+  local now = os.time()
+  if now - last_load < 60 then
+    return
+  end
+  last_load = now
+
   local f = io.open(policy_file, "r")
   if not f then
     rspamd_logger.warnx("alias_policy: cannot open policy file: %s", policy_file)
@@ -73,7 +65,6 @@ local function load_policies()
 end
 
 -- Load policies on module initialization
-sync_policies()
 load_policies()
 
 -- Rejects the email with an SMTP 5xx response and logs the reason.
@@ -91,8 +82,7 @@ end
 --   moderatorsonly - sender must be in the moderators list
 --   membersandmoderatorsonly - sender must be a member or moderator
 local function check_policy(task)
-  -- Refresh policies from Mailcow (rate-limited)
-  sync_policies()
+  -- Refresh policies from file (rate-limited)
   load_policies()
 
   -- Extract sender and recipients from the SMTP transaction

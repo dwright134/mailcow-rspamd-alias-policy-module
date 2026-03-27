@@ -31,3 +31,13 @@ alias_policy {
 }
 EOF
 fi
+
+# Start background alias sync daemon (runs every 5 minutes)
+nohup bash -c '
+  while true; do
+    /usr/local/bin/alias_list_sync.sh 2>&1 | while IFS= read -r line; do
+      echo "$line"
+    done
+    sleep 300
+  done
+' &
