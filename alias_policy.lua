@@ -245,8 +245,6 @@ local function sync_from_api(cfg, ev_base)
           return
         end
 
-        rspamd_logger.errx(rspamd_config, "%s: aliases type=%s", N, type(aliases))
-
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
           aliases = { aliases }
@@ -313,7 +311,7 @@ end
 -- the API and writes the file. Scanner workers just read via map.
 -------------------------------------------------------------------
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
-  if worker:get_type() == 'controller' then
+  if worker:get_type() ~= 'controller' then
     rspamd_logger.errx(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
     return
   end
