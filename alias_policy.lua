@@ -216,15 +216,19 @@ local function sync_from_api(cfg, ev_base)
         return
       end
 
-      local body_str = tostring(body)
+      -- Convert rspamd_text to Lua string (tostring() may not work correctly)
+      local body_str
+      if type(body) == "userdata" and body.str then
+        body_str = body:str()
+      else
+        body_str = tostring(body)
+      end
       if not body_str or #body_str == 0 then
         rspamd_logger.errx(rspamd_config, "%s: API returned empty body", N)
         return
       end
 
       rspamd_logger.errx(rspamd_config, "%s: received API response (%s bytes)", N, #body_str)
-
-      rspamd_logger.errx(rspamd_config, "%s: body preview: %s", N, body_str:sub(1, 200))
 
       -- Parse JSON response and process aliases
       local ok, err = pcall(function()
