@@ -3,14 +3,14 @@
 -- for Mailcow aliases. Policies are defined in the alias's private_comment
 -- field and synced from the Mailcow API.
 --
--- The module uses rspamd_http to fetch aliases directly from the Mailcow
--- API on a periodic timer (add_periodic), eliminating the need for external
--- shell scripts, cron jobs, or background processes. Policy data is kept
--- entirely in memory.
---
--- On cold start, the module loads any existing policy file from disk as a
--- bootstrap cache. Once the first HTTP sync completes, the in-memory table
--- is authoritative and the file is updated as a backup for future restarts.
+-- Architecture:
+--   - The primary controller worker fetches aliases from the Mailcow API
+--     on a periodic timer and writes the result to a JSON policy file.
+--   - All workers (including scanners) use rspamd's map subsystem to
+--     monitor the policy file. When it changes, the map callback parses
+--     the new content and rebuilds the in-memory policy table.
+--   - This means exactly one API call per sync interval, regardless of
+--     how many workers are running.
 
 -- Rspamd modules
 local rspamd_logger = require("rspamd_logger")
@@ -25,7 +25,7 @@ local settings = {
   api_key = nil,
   hostname = nil,
   sync_interval = 300,           -- seconds between API syncs
-  policy_file = "/etc/rspamd/list_policies.json",  -- disk cache for cold starts
+  policy_file = "/etc/rspamd/list_policies.json",  -- policy file watched by map
 }
 
 -- Valid policy values
@@ -66,18 +66,58 @@ local function trim(s)
   return s:match("^%s*(.-)%s*$")
 end
 
--- Parse raw API response (Lua table from JSON) into the policies table.
--- Returns new_policies table and count, or nil and error message.
+-------------------------------------------------------------------
+-- Map callback: called by rspamd's map subsystem whenever the
+-- policy file changes. Parses the UCL/JSON content and rebuilds
+-- the in-memory policies table. Runs in every worker.
+-------------------------------------------------------------------
+local function on_policy_map_load(data)
+  if not data or #data == 0 then
+    rspamd_logger.warnx(rspamd_config, "%s: map callback received empty data", N)
+    return
+  end
+
+  local parser = ucl.parser()
+  local ok, err = parser:parse_string(data)
+  if not ok then
+    rspamd_logger.errx(rspamd_config, "%s: failed to parse policy data: %s", N, err)
+    return
+  end
+  local raw = parser:get_object()
+
+  local new_policies = {}
+  local count = 0
+  for list_addr, val in pairs(raw) do
+    new_policies[list_addr:lower()] = {
+      policy = val.policy,
+      members = list_to_set(val.members),
+      moderators = list_to_set(val.moderators),
+    }
+    count = count + 1
+  end
+
+  policies = new_policies
+  rspamd_logger.infox(rspamd_config, "%s: loaded %s policies from map", N, count)
+end
+
+-------------------------------------------------------------------
+-- API sync: fetches aliases from the Mailcow API, parses them,
+-- and writes the policy file. Only called from the primary
+-- controller worker.
+-------------------------------------------------------------------
+
+-- Parse raw API response (Lua table from JSON) into a policy map
+-- suitable for writing to the policy file.
+-- Returns output table and count, or nil and error message.
 local function parse_aliases(aliases)
   if type(aliases) ~= "table" then
     return nil, "expected array of aliases"
   end
 
-  local new_policies = {}
+  local output = {}
   local count = 0
 
   for _, alias in ipairs(aliases) do
-    -- Only process active aliases
     if alias.active == 1 then
       local address = (alias.address or ""):lower()
       if address ~= "" then
@@ -85,12 +125,11 @@ local function parse_aliases(aliases)
         local parts = split(raw_comment, "::")
         local policy_name = trim(parts[1] or "")
 
-        -- Default to public if policy is unrecognized or empty
         if not valid_policies[policy_name] then
           policy_name = "public"
         end
 
-        -- Parse members from goto field (comma-separated)
+        -- Members from goto field (comma-separated)
         local members = {}
         local goto_str = alias["goto"] or ""
         if goto_str ~= "" then
@@ -102,7 +141,7 @@ local function parse_aliases(aliases)
           end
         end
 
-        -- Parse moderators from the part after :: in private_comment
+        -- Moderators from after :: in private_comment
         local moderators = {}
         if #parts > 1 then
           local mod_str = parts[2] or ""
@@ -114,113 +153,43 @@ local function parse_aliases(aliases)
           end
         end
 
-        new_policies[address] = {
+        output[address] = {
           policy = policy_name,
-          members = list_to_set(members),
-          moderators = list_to_set(moderators),
+          members = members,
+          moderators = moderators,
         }
         count = count + 1
       end
     end
   end
 
-  return new_policies, count
+  return output, count
 end
 
--- Load policies from the disk cache file (cold start bootstrap).
-local function load_policy_file()
-  local f = io.open(settings.policy_file, "r")
-  if not f then
-    rspamd_logger.infox(rspamd_config, "%s: no policy cache file at %s, starting empty",
-      N, settings.policy_file)
-    return
-  end
-
-  local data = f:read("*a")
-  f:close()
-
-  if not data or #data == 0 then
-    rspamd_logger.warnx(rspamd_config, "%s: policy cache file is empty", N)
-    return
-  end
-
-  local parser = ucl.parser()
-  local ok, err = parser:parse_string(data)
-  if not ok then
-    rspamd_logger.errx(rspamd_config, "%s: failed to parse policy cache: %s", N, err)
-    return
-  end
-
-  local raw = parser:get_object()
-  local new_policies = {}
-  local count = 0
-
-  for list_addr, val in pairs(raw) do
-    new_policies[list_addr:lower()] = {
-      policy = val.policy,
-      members = list_to_set(val.members),
-      moderators = list_to_set(val.moderators),
-    }
-    count = count + 1
-  end
-
-  policies = new_policies
-  rspamd_logger.infox(rspamd_config, "%s: loaded %s policies from cache file", N, count)
-end
-
--- Write current policies to disk cache for future cold starts.
--- Serializes the in-memory policies table to the same JSON format
--- that the old shell script produced, so the cache file is compatible.
-local function save_policy_file(new_policies)
-  -- Build a UCL-compatible table for serialization
-  local output = {}
-  for addr, pol in pairs(new_policies) do
-    local members_list = {}
-    for m, _ in pairs(pol.members) do
-      members_list[#members_list + 1] = m
-    end
-    local mods_list = {}
-    for m, _ in pairs(pol.moderators) do
-      mods_list[#mods_list + 1] = m
-    end
-    output[addr] = {
-      policy = pol.policy,
-      members = members_list,
-      moderators = mods_list,
-    }
-  end
-
-  local parser = ucl.parser()
-  -- Use ucl to serialize (roundtrip through parser to get emitter)
-  local json_str
-  local ok, err = parser:parse_string("{}")
-  if ok then
-    local emitter = ucl.to_json(output, true)
-    json_str = emitter
-  end
-
+-- Write policy table to disk (atomic write via tmp + rename).
+local function save_policy_file(policy_data)
+  local json_str = ucl.to_json(policy_data, true)
   if not json_str then
-    rspamd_logger.errx(rspamd_config, "%s: failed to serialize policies for cache", N)
+    rspamd_logger.errx(rspamd_config, "%s: failed to serialize policies", N)
     return
   end
 
   local tmp_path = settings.policy_file .. ".tmp"
   local f = io.open(tmp_path, "w")
   if not f then
-    rspamd_logger.errx(rspamd_config, "%s: cannot write policy cache to %s", N, tmp_path)
+    rspamd_logger.errx(rspamd_config, "%s: cannot write to %s", N, tmp_path)
     return
   end
   f:write(json_str)
   f:close()
   os.rename(tmp_path, settings.policy_file)
-  rspamd_logger.infox(rspamd_config, "%s: saved policy cache to %s", N, settings.policy_file)
+  rspamd_logger.infox(rspamd_config, "%s: wrote policy file %s", N, settings.policy_file)
 end
 
--- Fetch aliases from Mailcow API and update the in-memory policy table.
--- Called periodically via add_periodic and also on initial load.
-local function sync_policies(cfg, ev_base)
+-- Fetch aliases from Mailcow API and write the policy file.
+local function sync_from_api(cfg, ev_base)
   if not settings.api_key or not settings.hostname then
-    rspamd_logger.errx(cfg, "%s: api_key or hostname not configured, skipping sync", N)
+    rspamd_logger.errx(rspamd_config, "%s: api_key or hostname not configured, skipping sync", N)
     return
   end
 
@@ -238,46 +207,57 @@ local function sync_policies(cfg, ev_base)
     timeout = 30.0,
     callback = function(err_message, code, body, _headers)
       if err_message then
-        rspamd_logger.errx(cfg, "%s: API request failed: %s", N, err_message)
+        rspamd_logger.errx(rspamd_config, "%s: API request failed: %s", N, err_message)
         return
       end
 
       if code ~= 200 then
-        rspamd_logger.errx(cfg, "%s: API returned HTTP %s", N, code)
+        rspamd_logger.errx(rspamd_config, "%s: API returned HTTP %s", N, code)
         return
       end
 
-      if not body or #body == 0 then
-        rspamd_logger.errx(cfg, "%s: API returned empty body", N)
+      local body_str = tostring(body)
+      if not body_str or #body_str == 0 then
+        rspamd_logger.errx(rspamd_config, "%s: API returned empty body", N)
         return
       end
+
+      rspamd_logger.infox(rspamd_config, "%s: received API response (%s bytes)", N, #body_str)
 
       -- Parse JSON response
       local parser = ucl.parser()
-      local ok, parse_err = parser:parse_string(tostring(body))
+      local ok, parse_err = parser:parse_string(body_str)
       if not ok then
-        rspamd_logger.errx(cfg, "%s: failed to parse API response: %s", N, parse_err)
+        rspamd_logger.errx(rspamd_config, "%s: failed to parse API response: %s", N, parse_err)
         return
       end
 
       local aliases = parser:get_object()
-      local new_policies, result = parse_aliases(aliases)
-
-      if not new_policies then
-        rspamd_logger.errx(cfg, "%s: failed to process aliases: %s", N, result)
+      if not aliases then
+        rspamd_logger.errx(rspamd_config, "%s: UCL parsed to nil", N)
         return
       end
 
-      policies = new_policies
-      rspamd_logger.infox(cfg, "%s: synced %s policies from API", N, result)
+      -- Normalize: single object -> array
+      if aliases[1] == nil and aliases.address then
+        aliases = { aliases }
+      end
 
-      -- Save to disk cache for cold starts
-      save_policy_file(new_policies)
+      local policy_data, count = parse_aliases(aliases)
+      if not policy_data then
+        rspamd_logger.errx(rspamd_config, "%s: failed to process aliases: %s", N, count)
+        return
+      end
+
+      rspamd_logger.infox(rspamd_config, "%s: parsed %s policies from API", N, count)
+      save_policy_file(policy_data)
     end,
   })
 end
 
--- Read module configuration from rspamd config block
+-------------------------------------------------------------------
+-- Configuration
+-------------------------------------------------------------------
 local opts = rspamd_config:get_all_opt(N)
 if opts then
   if opts.api_key then
@@ -294,28 +274,53 @@ if opts then
   end
 end
 
--- Validate required configuration
 if not settings.api_key or not settings.hostname then
   rspamd_logger.errx(rspamd_config,
     "%s: missing required config (api_key and hostname must be set in alias_policy {} block)", N)
 end
 
--- Load cached policies from disk for immediate availability on cold start
-load_policy_file()
+-------------------------------------------------------------------
+-- Map registration: all workers watch the policy file via the map
+-- subsystem. The master process monitors the file (inotify/ev_stat)
+-- and pushes content to workers when it changes.
+-------------------------------------------------------------------
+local policy_map = rspamd_config:add_map({
+  type = "callback",
+  url = "file://" .. settings.policy_file,
+  description = "Alias sending policy map (JSON)",
+  callback = on_policy_map_load,
+})
 
--- Register periodic sync via rspamd's event loop
-rspamd_config:add_on_load(function(cfg, ev_base, _worker)
-  -- Run first sync immediately on worker start
-  sync_policies(cfg, ev_base)
+if not policy_map then
+  rspamd_logger.errx(rspamd_config, "%s: failed to register policy map for %s", N, settings.policy_file)
+end
+
+-------------------------------------------------------------------
+-- Periodic API sync: only the primary controller fetches from
+-- the API and writes the file. Scanner workers just read via map.
+-------------------------------------------------------------------
+rspamd_config:add_on_load(function(cfg, ev_base, worker)
+  if not worker:is_primary_controller() then
+    rspamd_logger.infox(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
+    return
+  end
+
+  rspamd_logger.infox(rspamd_config, "%s: primary controller starting API sync (interval=%ss)", N, settings.sync_interval)
+
+  -- First sync immediately
+  sync_from_api(cfg, ev_base)
 
   -- Schedule periodic syncs
   rspamd_config:add_periodic(ev_base, settings.sync_interval, function(periodic_cfg, periodic_ev_base)
-    sync_policies(periodic_cfg, periodic_ev_base)
-    return true  -- keep the periodic timer running
+    sync_from_api(periodic_cfg, periodic_ev_base)
+    return true
   end)
 end)
 
--- Rejects the email with an SMTP 5xx response and logs the reason.
+-------------------------------------------------------------------
+-- Prefilter: policy enforcement on incoming messages
+-------------------------------------------------------------------
+
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "%s: REJECT %s -> %s (%s)", N, sender, list_addr, msg)
   task:insert_result("ALIAS_POLICY", 1.0, list_addr)
@@ -323,21 +328,11 @@ local function reject(task, sender, list_addr, msg)
   return true
 end
 
--- Main prefilter callback. For each recipient, looks up the alias policy
--- and enforces it. If any recipient fails the check, the message is rejected.
--- Policy types:
---   public - anyone can send
---   domain - sender must be in the same domain as the alias
---   membersonly - sender must be a goto destination of the alias
---   moderatorsonly - sender must be in the moderators list
---   membersandmoderatorsonly - sender must be a member or moderator
 local function check_policy(task)
-  -- Guard: if the policies table is empty, allow the message (fail-open)
   if not next(policies) then
     return
   end
 
-  -- Extract sender and recipients from the SMTP transaction
   local sender = task:get_from("smtp")
   local rcpts = task:get_recipients("smtp")
   if not sender or not rcpts then
@@ -346,7 +341,6 @@ local function check_policy(task)
   sender = sender[1].addr:lower()
   local sender_domain = sender:match("@(.+)")
 
-  -- Check each recipient against its alias policy
   for _, rcpt in ipairs(rcpts) do
     local list_addr = rcpt.addr:lower()
     local list = policies[list_addr]
@@ -355,11 +349,9 @@ local function check_policy(task)
       rspamd_logger.infox(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
 
       if policy == "public" then
-        -- No restrictions: anyone can send
         rspamd_logger.infox(task, "%s: ALLOW %s -> %s (public)", N, sender, list_addr)
         break
       elseif policy == "domain" then
-        -- Sender must match the alias domain
         local list_domain = list_addr:match("@(.+)")
         if sender_domain ~= list_domain then
           reject(task, sender, list_addr, "Sender not in same domain")
@@ -368,7 +360,6 @@ local function check_policy(task)
           rspamd_logger.infox(task, "%s: ALLOW %s -> %s (domain match)", N, sender, list_addr)
         end
       elseif policy == "membersonly" then
-        -- Sender must be a goto destination (member) of the alias
         if not list.members[sender] then
           reject(task, sender, list_addr, "Sender not a member")
           return
@@ -376,7 +367,6 @@ local function check_policy(task)
           rspamd_logger.infox(task, "%s: ALLOW %s -> %s (member)", N, sender, list_addr)
         end
       elseif policy == "moderatorsonly" then
-        -- Sender must be in the moderators list defined in private_comment
         if not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a moderator")
           return
@@ -384,7 +374,6 @@ local function check_policy(task)
           rspamd_logger.infox(task, "%s: ALLOW %s -> %s (moderator)", N, sender, list_addr)
         end
       elseif policy == "membersandmoderatorsonly" then
-        -- Sender must be either a member or a moderator
         if not list.members[sender] and not list.moderators[sender] then
           reject(task, sender, list_addr, "Sender not a member or moderator")
           return
@@ -392,9 +381,7 @@ local function check_policy(task)
           rspamd_logger.infox(task, "%s: ALLOW %s -> %s (member/moderator)", N, sender, list_addr)
         end
       else
-        -- Unknown policy value: default to allowing (fail-open)
         rspamd_logger.warnx(task, "%s: unknown policy '%s' for %s, defaulting to allow", N, policy, list_addr)
-        rspamd_logger.infox(task, "%s: ALLOW %s -> %s (unknown policy)", N, sender, list_addr)
       end
     end
   end
@@ -403,6 +390,6 @@ end
 rspamd_config:register_symbol({
   name = "ALIAS_POLICY",
   type = "prefilter",
-  priority = 10, -- High priority to run before Mailcow whitelists
+  priority = 10,
   callback = check_policy,
 })

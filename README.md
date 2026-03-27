@@ -4,25 +4,26 @@ A lightweight mailing list policy enforcement system for [Mailcow](https://mailc
 
 ## How It Works
 
-The module is a single Rspamd Lua plugin (`alias_policy.lua`) that:
+The module is a single Rspamd Lua plugin (`alias_policy.lua`) with two cooperating parts:
 
-1. **Syncs policies** by calling the Mailcow API directly using rspamd's built-in HTTP client (`rspamd_http`), on a periodic timer managed by rspamd's event loop (`add_periodic`). No external scripts, background processes, or extra dependencies required.
+1. **API sync** (primary controller only) -- The primary controller worker fetches aliases from the Mailcow API using rspamd's built-in HTTP client (`rspamd_http`) on a periodic timer (`add_periodic`), and writes the result to a JSON policy file. Only one API call is made per sync interval, regardless of how many workers are running.
 
-2. **Enforces policies** as a high-priority prefilter that checks each incoming message's sender against the configured policy for each recipient alias. Unauthorized senders receive an SMTP reject.
+2. **Policy enforcement** (all workers) -- All workers monitor the policy file via rspamd's map subsystem (`add_map`), which uses inotify/ev_stat to detect changes and pushes updated content to workers automatically. Each incoming message is checked against the in-memory policy table as a high-priority prefilter.
 
 ```
 Mailcow API (/api/v1/get/alias/all)
        |
-       v  (rspamd_http, every 5 min via add_periodic)
-alias_policy.lua (in-memory policy table)
+       v  (rspamd_http, primary controller only, every 5 min)
+/etc/rspamd/list_policies.json  (atomic write)
+       |
+       v  (map subsystem, inotify, all workers)
+in-memory policy table
        |
        v  (prefilter, priority 10)
 ALLOW or REJECT (SMTP 5xx)
 ```
 
-On cold start, the module loads a cached policy file from disk (`/etc/rspamd/list_policies.json`) for immediate availability, then overwrites it after the first successful API sync.
-
-Changes to alias policies in Mailcow take effect within ~5 minutes.
+No external scripts, background processes, or extra dependencies required. Changes to alias policies in Mailcow take effect within ~5 minutes.
 
 ## Configuration
 
