@@ -244,18 +244,14 @@ local function sync_from_api(cfg, ev_base)
           return
         end
 
-        local aliases = parser:get_object_wrapped()
-        if not aliases then
+        local wrapped = parser:get_object_wrapped()
+        if not wrapped then
           rspamd_logger.errx(rspamd_config, "%s: UCL parsed to nil", N)
           return
         end
 
-        -- Debug: show keys in aliases table
-        local keys = {}
-        for k, _ in pairs(aliases) do
-          keys[#keys + 1] = tostring(k)
-        end
-        rspamd_logger.errx(rspamd_config, "%s: aliases keys: %s", N, table.concat(keys, ", "))
+        -- get_object_wrapped() returns userdata; unwrap to native Lua table
+        local aliases = wrapped:unwrap()
 
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
