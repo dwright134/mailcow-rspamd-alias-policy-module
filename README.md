@@ -4,19 +4,25 @@ A lightweight mailing list policy enforcement system for [Mailcow](https://mailc
 
 ## How It Works
 
-The system has two components:
+The module is a single Rspamd Lua plugin (`alias_policy.lua`) that:
 
-1. **Sync script** (`alias_list_sync.sh`) -- Fetches all active aliases from the Mailcow API, parses the `private_comment` field for policy configuration, and writes a JSON file (`/etc/rspamd/list_policies.json`).
+1. **Syncs policies** by calling the Mailcow API directly using rspamd's built-in HTTP client (`rspamd_http`), on a periodic timer managed by rspamd's event loop (`add_periodic`). No external scripts, background processes, or extra dependencies required.
 
-2. **Rspamd Lua module** (`alias_policy.lua`) -- A prefilter that calls the sync script, then loads the JSON file to check incoming messages against the configured policies. Unauthorized senders receive an SMTP reject. The sync script runs at most once every 60 seconds.
+2. **Enforces policies** as a high-priority prefilter that checks each incoming message's sender against the configured policy for each recipient alias. Unauthorized senders receive an SMTP reject.
 
 ```
-check_policy (incoming message)  -->  sync_policies (run alias_list_sync.sh)
-                                   -->  load_policies (read list_policies.json)
-                                   -->  enforce policy (ALLOW / REJECT)
+Mailcow API (/api/v1/get/alias/all)
+       |
+       v  (rspamd_http, every 5 min via add_periodic)
+alias_policy.lua (in-memory policy table)
+       |
+       v  (prefilter, priority 10)
+ALLOW or REJECT (SMTP 5xx)
 ```
 
-Changes to alias policies in Mailcow take effect within ~60 seconds.
+On cold start, the module loads a cached policy file from disk (`/etc/rspamd/list_policies.json`) for immediate availability, then overwrites it after the first successful API sync.
+
+Changes to alias policies in Mailcow take effect within ~5 minutes.
 
 ## Configuration
 
@@ -91,7 +97,6 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
 - A running Mailcow instance with API access
 - Rspamd (included with Mailcow)
-- `jq` and `curl` available on the Rspamd container
 
 ## Installation
 
@@ -123,10 +128,9 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
    ```
 
    This applies the environment variables and triggers the setup script (`alias_policy_setup.sh`) which will:
-   - Copy `alias_list_sync.sh` to `/usr/local/bin/`
-   - Create an env file at `/etc/alias_list_sync.env`
    - Install `alias_policy.lua` into Rspamd's plugins directory
-   - Register the module in `rspamd.conf.local`
+   - Register the module in `rspamd.conf.local` with API credentials
+   - Initialize the policy cache file
 
 ## Environment Variables
 
@@ -135,14 +139,31 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 | `MAILCOW_HOSTNAME` | Yes | Hostname of the Mailcow instance (already set in `mailcow.conf`) |
 | `API_KEY_READ_ONLY` | Yes | Read-only API key, set in `mailcow.conf` |
 
+## Module Configuration
+
+The setup script writes the following configuration block to `rspamd.conf.local`:
+
+```
+alias_policy {
+  api_key = "<your-api-key>";
+  hostname = "<your-hostname>";
+  sync_interval = 300;
+}
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `api_key` | *(required)* | Mailcow read-only API key |
+| `hostname` | *(required)* | Mailcow hostname for API requests |
+| `sync_interval` | `300` | Seconds between API syncs |
+| `policy_file` | `/etc/rspamd/list_policies.json` | Path to the disk cache file |
+
 ## File Locations
 
 | File | Path | Description |
 |---|---|---|
-| Sync script | `/usr/local/bin/alias_list_sync.sh` | Fetches aliases from Mailcow API and writes JSON |
-| Lua module | `/etc/rspamd/plugins.d/alias_policy.lua` | Rspamd prefilter that enforces policies |
-| Policy JSON | `/etc/rspamd/list_policies.json` | Generated policy data (do not edit manually) |
-| Env file | `/etc/alias_list_sync.env` | Environment variables for the sync script |
+| Lua module | `/etc/rspamd/plugins.d/alias_policy.lua` | Rspamd prefilter that syncs and enforces policies |
+| Policy cache | `/etc/rspamd/list_policies.json` | Cached policy data for cold starts (auto-managed) |
 
 ## Logging
 
@@ -150,13 +171,13 @@ The module logs all activity prefixed with `alias_policy:` for easy filtering. E
 
 | Event | Log Level | Example |
 |---|---|---|
-| Policies loaded | `info` | `alias_policy: loaded 12 policies from /etc/rspamd/list_policies.json` |
+| Policies synced | `info` | `alias_policy: synced 12 policies from API` |
+| Cache loaded | `info` | `alias_policy: loaded 12 policies from cache file` |
 | ACL check | `info` | `alias_policy: checking user@example.com -> list@domain.com (policy=membersonly)` |
 | Allowed | `info` | `alias_policy: ALLOW user@example.com -> list@domain.com (member)` |
 | Rejected | `info` | `alias_policy: REJECT user@example.com -> list@domain.com (Sender not a member)` |
-| Sync failure | `error` | `alias_policy: sync script failed (exit code 1)` |
-| File not found | `warn` | `alias_policy: cannot open policy file: /etc/rspamd/list_policies.json` |
-| Parse error | `error` | `alias_policy: failed to parse ...: ...` |
+| API failure | `error` | `alias_policy: API request failed: connection refused` |
+| Parse error | `error` | `alias_policy: failed to parse API response: ...` |
 
 View logs in the Rspamd container:
 ```bash
