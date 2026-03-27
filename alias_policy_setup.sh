@@ -34,10 +34,9 @@ fi
 
 # Start background alias sync daemon (runs every 5 minutes)
 nohup bash -c '
+  exec > /dev/stdout
   while true; do
-    /usr/local/bin/alias_list_sync.sh 2>&1 | while IFS= read -r line; do
-      echo "$line"
-    done
+    /usr/local/bin/alias_list_sync.sh
     sleep 300
   done
 ' &
