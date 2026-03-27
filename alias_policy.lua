@@ -70,7 +70,9 @@ load_policies()
 -- Rejects the email with an SMTP 5xx response and logs the reason.
 local function reject(task, sender, list_addr, msg)
   rspamd_logger.infox(task, "alias_policy: REJECT %s -> %s (%s)", sender, list_addr, msg)
+  task:insert_result("ALIAS_POLICY", 1.0, list_addr)
   task:set_pre_result("reject", msg)
+  return true
 end
 
 -- Main prefilter callback. For each recipient, looks up the alias policy
