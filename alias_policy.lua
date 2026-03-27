@@ -118,9 +118,12 @@ local function parse_aliases(aliases)
   local count = 0
 
   for _, alias in ipairs(aliases) do
+    rspamd_logger.errx(rspamd_config, "%s: DEBUG: alias.address=%s, active=%s (%s), tonumber=%s", 
+      N, tostring(alias.address), tostring(alias.active), type(alias.active), tostring(tonumber(alias.active)))
     if tonumber(alias.active) == 1 then
       local address = (alias.address or ""):lower()
       if address ~= "" then
+        rspamd_logger.errx(rspamd_config, "%s: DEBUG: processing alias %s", N, address)
         local raw_comment = (alias.private_comment or ""):lower()
         local parts = split(raw_comment, "::")
         local policy_name = trim(parts[1] or "")
