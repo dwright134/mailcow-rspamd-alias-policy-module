@@ -2,6 +2,10 @@
 -- Rspamd prefilter module that enforces mailing list sending policies
 -- for Mailcow aliases. Policies are defined in the alias's private_comment
 -- field and synced via alias_list_sync.sh to list_policies.json.
+--
+-- Policy data is loaded via rspamd's map subsystem (callback map), which
+-- monitors the file for changes using inotify/ev_stat in the master process
+-- and distributes updated data to workers without blocking them.
 
 -- Rspamd modules
 local rspamd_logger = require("rspamd_logger")
@@ -10,7 +14,6 @@ local ucl = require("ucl")
 -- Configuration
 local policy_file = "/etc/rspamd/list_policies.json"  -- JSON file written by sync daemon
 local policies = {}  -- In-memory policy table (address -> policy data)
-local last_load = 0  -- Timestamp of last file load (rate-limited to 60s)
 
 -- Converts an array of strings into a lookup set (lowercase keys).
 -- Used to quickly check if a sender is in the members or moderators list.
@@ -24,48 +27,54 @@ local function list_to_set(list)
   return set
 end
 
--- Reads the policy JSON file and populates the in-memory policies table.
--- Rate-limited to once every 60 seconds to avoid excessive file I/O.
--- Uses UCL parser which can parse JSON (a subset of UCL).
--- Each entry maps an alias address to its policy, members, and moderators.
-local function load_policies()
-  local now = os.time()
-  if now - last_load < 60 then
+-- Map callback: called by rspamd's map subsystem whenever the policy file
+-- changes. Receives the raw file content as a string, parses it with UCL,
+-- and rebuilds the in-memory policies table. This runs in the worker context
+-- but is triggered by the master process's file monitoring, so workers never
+-- do their own file I/O or polling.
+local function on_policy_map_load(data)
+  if not data or #data == 0 then
+    rspamd_logger.warnx(rspamd_config, "alias_policy: map callback received empty data")
     return
   end
-  last_load = now
-
-  local f = io.open(policy_file, "r")
-  if not f then
-    rspamd_logger.warnx("alias_policy: cannot open policy file: %s", policy_file)
-    return
-  end
-  local data = f:read("*all")
-  f:close()
 
   local parser = ucl.parser()
   local ok, err = parser:parse_string(data)
   if not ok then
-    rspamd_logger.errx("alias_policy: failed to parse %s: %s", policy_file, err)
+    rspamd_logger.errx(rspamd_config, "alias_policy: failed to parse policy data: %s", err)
     return
   end
   local raw = parser:get_object()
 
+  local new_policies = {}
   local count = 0
-  policies = {}
   for list_addr, val in pairs(raw) do
-    policies[list_addr:lower()] = {
+    new_policies[list_addr:lower()] = {
       policy = val.policy,
       members = list_to_set(val.members),
       moderators = list_to_set(val.moderators),
     }
     count = count + 1
   end
-  rspamd_logger.infox("alias_policy: loaded %s policies from %s", count, policy_file)
+
+  policies = new_policies
+  rspamd_logger.infox(rspamd_config, "alias_policy: loaded %s policies from map", count)
 end
 
--- Load policies on module initialization
-load_policies()
+-- Register the policy file as a callback map. The map subsystem handles:
+--   - File monitoring (inotify where available, ev_stat fallback)
+--   - Automatic reload on file change
+--   - Delivering the full file content to on_policy_map_load
+local policy_map = rspamd_config:add_map({
+  type = "callback",
+  url = "file://" .. policy_file,
+  description = "Alias sending policy map (JSON)",
+  callback = on_policy_map_load,
+})
+
+if not policy_map then
+  rspamd_logger.errx(rspamd_config, "alias_policy: failed to add policy map for %s", policy_file)
+end
 
 -- Rejects the email with an SMTP 5xx response and logs the reason.
 local function reject(task, sender, list_addr, msg)
@@ -84,8 +93,10 @@ end
 --   moderatorsonly - sender must be in the moderators list
 --   membersandmoderatorsonly - sender must be a member or moderator
 local function check_policy(task)
-  -- Refresh policies from file (rate-limited)
-  load_policies()
+  -- Guard: if the map has not loaded yet, allow the message (fail-open)
+  if not next(policies) then
+    return
+  end
 
   -- Extract sender and recipients from the SMTP transaction
   local sender = task:get_from("smtp")
@@ -150,15 +161,9 @@ local function check_policy(task)
   end
 end
 
--- Register symbol for logging/identification
 rspamd_config:register_symbol({
-  name = 'ALIAS_POLICY',
-  score = 0,
-  type = 'virtual'
-})
-
--- Register as a prefilter (runs before all other Rspamd filters)
-rspamd_config.ALIAS_POLICY = {
+  name = "ALIAS_POLICY",
   type = "prefilter",
+  priority = 10, -- High priority to run before Mailcow whitelists
   callback = check_policy,
-}
+})
