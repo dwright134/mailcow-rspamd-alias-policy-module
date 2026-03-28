@@ -120,13 +120,9 @@ local function parse_aliases(cfg, aliases)
   local count = 0
 
   for _, alias in ipairs(aliases) do
-    rspamd_logger.errx(cfg, "%s: DEBUG: alias.address=%s, active=%s (%s), tonumber=%s", 
-      N, tostring(alias.address), tostring(alias.active), type(alias.active), tostring(tonumber(alias.active)))
     if tonumber(alias.active) == 1 then
       local address = (alias.address or ""):lower()
       if address ~= "" then
-        rspamd_logger.errx(cfg, "%s: DEBUG: processing alias %s, private_comment=%s (%s)", 
-          N, address, tostring(alias.private_comment), type(alias.private_comment))
         local raw_comment = ""
         if alias.private_comment and type(alias.private_comment) == "string" then
           raw_comment = alias.private_comment:lower()
