@@ -138,7 +138,7 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
    This applies the environment variables and triggers the setup hook (`alias_policy_setup.sh`), which will:
    - Install `alias_policy.lua` into Rspamd's plugins directory
-   - Register the module in `rspamd.conf.local` with API credentials
+   - Update the `alias_policy {}` block in `rspamd.conf.local` with API credentials while preserving other existing local Rspamd configuration
    - Initialize the policy cache file
 
 ## Environment Variables
