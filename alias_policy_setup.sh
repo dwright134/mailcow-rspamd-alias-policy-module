@@ -16,7 +16,7 @@ if [ -f /etc/rspamd/rspamd.conf.local ]; then
   sed -i '/^alias_policy[[:space:]]*{/,/^}/d' /etc/rspamd/rspamd.conf.local
 fi
 
-cat <<EOF >>/etc/rspamd/rspamd.conf.local
+cat <<EOF >/etc/rspamd/rspamd.conf.local
 alias_policy {
   api_key = "${API_KEY_READ_ONLY}";
   hostname = "${MAILCOW_HOSTNAME}";
