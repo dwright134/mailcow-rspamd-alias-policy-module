@@ -48,10 +48,9 @@ local function compute_hash(str)
   local hash = 2166136261
   local byte = string.byte
   local xor = bit.bxor
-  local mul = bit.bmul
   for i = 1, #str do
     hash = xor(hash, byte(str, i))
-    hash = mul(hash, 16777619)
+    hash = hash * 16777619
   end
   return string.format("%08x", hash)
 end
