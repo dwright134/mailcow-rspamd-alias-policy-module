@@ -208,7 +208,13 @@ local function save_policy_file(policy_data)
   end
   f:write(json_str)
   f:close()
-  os.rename(tmp_path, settings.policy_file)
+
+  local renamed, rename_err = os.rename(tmp_path, settings.policy_file)
+  if not renamed then
+    rspamd_logger.errx(rspamd_config, "%s: failed to move %s to %s: %s",
+      N, tmp_path, settings.policy_file, tostring(rename_err))
+    return
+  end
 
   cached_policy_hash = new_hash
   rspamd_logger.errx(rspamd_config, "%s: wrote policy file %s", N, settings.policy_file)
@@ -400,7 +406,6 @@ local function check_policy(task)
 
       if policy == "public" then
         rspamd_logger.errx(task, "%s: ALLOW %s -> %s (public)", N, sender, list_addr)
-        break
       elseif policy == "domain" then
         local list_domain = list_addr:match("@(.+)")
         if sender_domain ~= list_domain then

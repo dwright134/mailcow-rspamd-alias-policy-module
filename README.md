@@ -4,7 +4,12 @@ A lightweight mailing list policy enforcement system for [Mailcow](https://mailc
 
 ## How It Works
 
-The module is a single Rspamd Lua plugin (`alias_policy.lua`) with two cooperating parts:
+This repo contains:
+
+- `alias_policy.lua` - the Rspamd Lua prefilter that syncs and enforces alias policies
+- `alias_policy_setup.sh` - the Mailcow hook script that installs the Lua module and writes the `alias_policy {}` config block on container start
+
+At runtime, the Lua module has two cooperating parts:
 
 1. **API sync** (primary controller only) -- The primary controller worker fetches aliases from the Mailcow API using rspamd's built-in HTTP client (`rspamd_http`) on a periodic timer (`add_periodic`). Before writing, it computes a hash of the new policy data and compares it against the cached hash. The policy file is only updated if the data has changed. On startup, if cached policies exist from a previous run, the initial sync is skipped.
 
@@ -13,7 +18,7 @@ The module is a single Rspamd Lua plugin (`alias_policy.lua`) with two cooperati
 ```
 Mailcow API (/api/v1/get/alias/all)
        |
-       v  (rspamd_http, primary controller only, every 5 min)
+       v  (rspamd_http, primary controller only, every sync interval)
        |
        |  (hash comparison - skip if unchanged)
        v
@@ -26,7 +31,7 @@ in-memory policy table + cached hash
 ALLOW or REJECT (SMTP 5xx)
 ```
 
-No external scripts, background processes, or extra dependencies required. On first run, policies are fetched from the API. On subsequent runs, cached policies are used immediately and the API is only hit if policies have actually changed.
+No extra daemons or external runtime dependencies are required. On first run, policies are fetched from the API. On subsequent runs, cached policies are used immediately and the API is only hit if policies have actually changed.
 
 ## Configuration
 
@@ -121,17 +126,17 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
            - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
      ```
 
-2. Copy the module files into mailcow:
+2. Copy the repo contents into mailcow:
 
    Copy the contents of this repo to `mailcow-dockerized/data/hooks/rspamd/`.
 
-3. Restart mailcow:
+3. Restart the Rspamd container:
 
    ```bash
-   docker compose restart
+   docker compose restart rspamd-mailcow
    ```
 
-   This applies the environment variables and triggers the setup script (`alias_policy_setup.sh`) which will:
+   This applies the environment variables and triggers the setup hook (`alias_policy_setup.sh`), which will:
    - Install `alias_policy.lua` into Rspamd's plugins directory
    - Register the module in `rspamd.conf.local` with API credentials
    - Initialize the policy cache file
@@ -151,7 +156,7 @@ The setup script writes the following configuration block to `rspamd.conf.local`
 alias_policy {
   api_key = "<your-api-key>";
   hostname = "<your-hostname>";
-  sync_interval = 300;
+  sync_interval = 60;
 }
 ```
 
@@ -159,7 +164,7 @@ alias_policy {
 |---|---|---|
 | `api_key` | *(required)* | Mailcow read-only API key |
 | `hostname` | *(required)* | Mailcow hostname for API requests |
-| `sync_interval` | `300` | Seconds between API syncs |
+| `sync_interval` | `300` in `alias_policy.lua`, `60` in the setup script's generated config | Seconds between API syncs |
 | `policy_file` | `/etc/rspamd/local.d/list_policies.json` | Path to the disk cache file |
 
 ## File Locations
@@ -175,9 +180,10 @@ Mailcow sets the Rspamd minimum log level to `error`, so all module logs are wri
 
 | Event | What's Logged |
 |---|---|
-| Initial sync | Number of policies fetched from API |
-| Cache load | Number of policies loaded from file, skipped if hash already cached |
-| Hash comparison | Whether policy data changed (determines if file is written) |
+| Initial sync | Whether cached policies were found and whether an immediate API sync is triggered |
+| API sync | API response size, parse failures, HTTP failures, and number of policies parsed |
+| Policy map reload | Number of policies loaded from the on-disk map file |
+| Policy write decision | Whether the generated policy data changed and whether the cache file was rewritten |
 | ACL check | Sender, recipient, and applicable policy for each message |
 | Decision | ALLOW or REJECT with the reason (member, moderator, domain, etc.) |
 | Errors | API failures, parse errors, file write failures with details |
