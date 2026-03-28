@@ -40,6 +40,22 @@ local valid_policies = {
 -- In-memory policy table (address -> policy data)
 local policies = {}
 
+-- Cached hash of last written policy file (for change detection)
+local cached_policy_hash = nil
+
+-- Simple hash function (FNV-1a variant)
+local function compute_hash(str)
+  local hash = 2166136261
+  local byte = string.byte
+  local xor = bit.bxor
+  local mul = bit.bmul
+  for i = 1, #str do
+    hash = xor(hash, byte(str, i))
+    hash = mul(hash, 16777619)
+  end
+  return string.format("%08x", hash)
+end
+
 -- Converts an array of strings into a lookup set (lowercase keys).
 local function list_to_set(list)
   local set = {}
@@ -97,6 +113,7 @@ local function on_policy_map_load(data)
   end
 
   policies = new_policies
+  cached_policy_hash = compute_hash(data)
   rspamd_logger.errx(rspamd_config, "%s: loaded %s policies from map", N, count)
 end
 
@@ -170,10 +187,17 @@ local function parse_aliases(cfg, aliases)
 end
 
 -- Write policy table to disk (atomic write via tmp + rename).
+-- Only writes if policy has changed (compared by hash).
 local function save_policy_file(policy_data)
   local json_str = ucl.to_json(policy_data, true)
   if not json_str then
     rspamd_logger.errx(rspamd_config, "%s: failed to serialize policies", N)
+    return
+  end
+
+  local new_hash = compute_hash(json_str)
+  if new_hash == cached_policy_hash then
+    rspamd_logger.errx(rspamd_config, "%s: policy unchanged, skipping write", N)
     return
   end
 
@@ -186,6 +210,8 @@ local function save_policy_file(policy_data)
   f:write(json_str)
   f:close()
   os.rename(tmp_path, settings.policy_file)
+
+  cached_policy_hash = new_hash
   rspamd_logger.errx(rspamd_config, "%s: wrote policy file %s", N, settings.policy_file)
 end
 
@@ -328,10 +354,12 @@ rspamd_config:add_on_load(function(cfg, ev_base, worker)
     return
   end
 
-  rspamd_logger.errx(rspamd_config, "%s: primary controller starting API sync (interval=%ss)", N, settings.sync_interval)
-
-  -- First sync immediately
-  sync_from_api(cfg, ev_base)
+  if cached_policy_hash then
+    rspamd_logger.errx(rspamd_config, "%s: using cached policies, skipping initial sync (interval=%ss)", N, settings.sync_interval)
+  else
+    rspamd_logger.errx(rspamd_config, "%s: no cached policies, triggering initial sync (interval=%ss)", N, settings.sync_interval)
+    sync_from_api(cfg, ev_base)
+  end
 
   -- Schedule periodic syncs
   rspamd_config:add_periodic(ev_base, settings.sync_interval, function(periodic_cfg, periodic_ev_base)
