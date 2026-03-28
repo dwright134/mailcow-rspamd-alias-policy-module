@@ -6,7 +6,7 @@ A lightweight mailing list policy enforcement system for [Mailcow](https://mailc
 
 The module is a single Rspamd Lua plugin (`alias_policy.lua`) with two cooperating parts:
 
-1. **API sync** (primary controller only) -- The primary controller worker fetches aliases from the Mailcow API using rspamd's built-in HTTP client (`rspamd_http`) on a periodic timer (`add_periodic`), and writes the result to a JSON policy file. Only one API call is made per sync interval, regardless of how many workers are running.
+1. **API sync** (primary controller only) -- The primary controller worker fetches aliases from the Mailcow API using rspamd's built-in HTTP client (`rspamd_http`) on a periodic timer (`add_periodic`). Before writing, it computes a hash of the new policy data and compares it against the cached hash. The policy file is only updated if the data has changed. On startup, if cached policies exist from a previous run, the initial sync is skipped.
 
 2. **Policy enforcement** (all workers) -- All workers monitor the policy file via rspamd's map subsystem (`add_map`), which uses inotify/ev_stat to detect changes and pushes updated content to workers automatically. Each incoming message is checked against the in-memory policy table as a high-priority prefilter.
 
@@ -14,16 +14,19 @@ The module is a single Rspamd Lua plugin (`alias_policy.lua`) with two cooperati
 Mailcow API (/api/v1/get/alias/all)
        |
        v  (rspamd_http, primary controller only, every 5 min)
-/etc/rspamd/list_policies.json  (atomic write)
+       |
+       |  (hash comparison - skip if unchanged)
+       v
+/etc/rspamd/list_policies.json  (atomic write, only if changed)
        |
        v  (map subsystem, inotify, all workers)
-in-memory policy table
+in-memory policy table + cached hash
        |
        v  (prefilter, priority 10)
 ALLOW or REJECT (SMTP 5xx)
 ```
 
-No external scripts, background processes, or extra dependencies required. Changes to alias policies in Mailcow take effect within ~5 minutes.
+No external scripts, background processes, or extra dependencies required. On first run, policies are fetched from the API. On subsequent runs, cached policies are used immediately and the API is only hit if policies have actually changed.
 
 ## Configuration
 
@@ -174,6 +177,8 @@ The module logs all activity prefixed with `alias_policy:` for easy filtering. E
 |---|---|---|
 | Policies synced | `info` | `alias_policy: synced 12 policies from API` |
 | Cache loaded | `info` | `alias_policy: loaded 12 policies from cache file` |
+| Using cached policies | `info` | `alias_policy: using cached policies, skipping initial sync` |
+| Policy unchanged | `info` | `alias_policy: policy unchanged, skipping write` |
 | ACL check | `info` | `alias_policy: checking user@example.com -> list@domain.com (policy=membersonly)` |
 | Allowed | `info` | `alias_policy: ALLOW user@example.com -> list@domain.com (member)` |
 | Rejected | `info` | `alias_policy: REJECT user@example.com -> list@domain.com (Sender not a member)` |
