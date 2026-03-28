@@ -250,8 +250,15 @@ local function sync_from_api(cfg, ev_base)
           return
         end
 
-        -- get_object_wrapped() returns userdata; unwrap to native Lua table
-        local aliases = wrapped:unwrap()
+        -- Convert wrapped UCL object to JSON string, then re-parse to get native Lua tables
+        local json_str = wrapped:tostring("json-compact")
+        local parser2 = ucl.parser()
+        local ok2, err2 = parser2:parse_string(json_str)
+        if not ok2 then
+          rspamd_logger.errx(rspamd_config, "%s: failed to re-parse JSON: %s", N, err2)
+          return
+        end
+        local aliases = parser2:get_object()
 
         -- Normalize: single object -> array
         if aliases[1] == nil and aliases.address then
