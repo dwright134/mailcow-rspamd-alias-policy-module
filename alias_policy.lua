@@ -114,8 +114,6 @@ local function parse_aliases(cfg, aliases)
     return nil, "expected array of aliases"
   end
 
-  rspamd_logger.errx(cfg, "%s: parse_aliases: got %d items", N, #aliases)
-
   local output = {}
   local count = 0
 
