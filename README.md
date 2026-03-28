@@ -17,7 +17,7 @@ Mailcow API (/api/v1/get/alias/all)
        |
        |  (hash comparison - skip if unchanged)
        v
-/etc/rspamd/list_policies.json  (atomic write, only if changed)
+/etc/rspamd/local.d/list_policies.json  (atomic write, only if changed)
        |
        v  (map subsystem, inotify, all workers)
 in-memory policy table + cached hash
@@ -160,14 +160,14 @@ alias_policy {
 | `api_key` | *(required)* | Mailcow read-only API key |
 | `hostname` | *(required)* | Mailcow hostname for API requests |
 | `sync_interval` | `300` | Seconds between API syncs |
-| `policy_file` | `/etc/rspamd/list_policies.json` | Path to the disk cache file |
+| `policy_file` | `/etc/rspamd/local.d/list_policies.json` | Path to the disk cache file |
 
 ## File Locations
 
 | File | Path | Description |
 |---|---|---|
 | Lua module | `/etc/rspamd/plugins.d/alias_policy.lua` | Rspamd prefilter that syncs and enforces policies |
-| Policy cache | `/etc/rspamd/list_policies.json` | Cached policy data for cold starts (auto-managed) |
+| Policy cache | `/etc/rspamd/local.d/list_policies.json` | Cached policy data for cold starts (auto-managed) |
 
 ## Logging
 
