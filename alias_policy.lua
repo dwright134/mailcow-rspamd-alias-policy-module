@@ -136,48 +136,48 @@ local function parse_aliases(cfg, aliases)
   for _, alias in ipairs(aliases) do
     if tonumber(alias.active) == 1 then
       local address = (alias.address or ""):lower()
-      if address ~= "" then
-        local raw_comment = ""
-        if alias.private_comment and type(alias.private_comment) == "string" then
-          raw_comment = alias.private_comment:lower()
-        end
-        local parts = split(raw_comment, "::")
-        local policy_name = trim(parts[1] or "")
+      if address ~= "" and alias.private_comment then
+        local raw_comment = alias.private_comment
+        if type(raw_comment) == "string" then
+          raw_comment = raw_comment:lower()
+          local parts = split(raw_comment, "::")
+          local policy_name = trim(parts[1] or "")
 
-        if not valid_policies[policy_name] then
-          policy_name = "public"
-        end
+          if not valid_policies[policy_name] then
+            policy_name = "public"
+          end
 
-        -- Members from goto field (comma-separated)
-        local members = {}
-        local goto_str = alias["goto"] or ""
-        if goto_str ~= "" then
-          for _, addr in ipairs(split(goto_str, ",")) do
-            local cleaned = trim(addr):lower()
-            if cleaned ~= "" then
-              members[#members + 1] = cleaned
+          -- Members from goto field (comma-separated)
+          local members = {}
+          local goto_str = alias["goto"] or ""
+          if goto_str ~= "" then
+            for _, addr in ipairs(split(goto_str, ",")) do
+              local cleaned = trim(addr):lower()
+              if cleaned ~= "" then
+                members[#members + 1] = cleaned
+              end
             end
           end
-        end
 
-        -- Moderators from after :: in private_comment
-        local moderators = {}
-        if #parts > 1 then
-          local mod_str = parts[2] or ""
-          for _, addr in ipairs(split(mod_str, ",")) do
-            local cleaned = trim(addr):lower()
-            if cleaned ~= "" then
-              moderators[#moderators + 1] = cleaned
+          -- Moderators from after :: in private_comment
+          local moderators = {}
+          if #parts > 1 then
+            local mod_str = parts[2] or ""
+            for _, addr in ipairs(split(mod_str, ",")) do
+              local cleaned = trim(addr):lower()
+              if cleaned ~= "" then
+                moderators[#moderators + 1] = cleaned
+              end
             end
           end
-        end
 
-        output[address] = {
-          policy = policy_name,
-          members = members,
-          moderators = moderators,
-        }
-        count = count + 1
+          output[address] = {
+            policy = policy_name,
+            members = members,
+            moderators = moderators,
+          }
+          count = count + 1
+        end
       end
     end
   end
