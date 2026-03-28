@@ -171,19 +171,16 @@ alias_policy {
 
 ## Logging
 
-The module logs all activity prefixed with `alias_policy:` for easy filtering. Each message includes the sender, recipient, policy, and decision.
+Mailcow sets the Rspamd minimum log level to `error`, so all module logs are written using `rspamd_config:errx()` regardless of event type. Each message is prefixed with `alias_policy:` for easy filtering.
 
-| Event | Log Level | Example |
-|---|---|---|
-| Policies synced | `info` | `alias_policy: synced 12 policies from API` |
-| Cache loaded | `info` | `alias_policy: loaded 12 policies from cache file` |
-| Using cached policies | `info` | `alias_policy: using cached policies, skipping initial sync` |
-| Policy unchanged | `info` | `alias_policy: policy unchanged, skipping write` |
-| ACL check | `info` | `alias_policy: checking user@example.com -> list@domain.com (policy=membersonly)` |
-| Allowed | `info` | `alias_policy: ALLOW user@example.com -> list@domain.com (member)` |
-| Rejected | `info` | `alias_policy: REJECT user@example.com -> list@domain.com (Sender not a member)` |
-| API failure | `error` | `alias_policy: API request failed: connection refused` |
-| Parse error | `error` | `alias_policy: failed to parse API response: ...` |
+| Event | What's Logged |
+|---|---|
+| Initial sync | Number of policies fetched from API |
+| Cache load | Number of policies loaded from file, skipped if hash already cached |
+| Hash comparison | Whether policy data changed (determines if file is written) |
+| ACL check | Sender, recipient, and applicable policy for each message |
+| Decision | ALLOW or REJECT with the reason (member, moderator, domain, etc.) |
+| Errors | API failures, parse errors, file write failures with details |
 
 View logs in the Rspamd container:
 ```bash
