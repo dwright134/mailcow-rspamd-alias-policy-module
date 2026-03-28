@@ -20,6 +20,6 @@ cat <<EOF >>/etc/rspamd/rspamd.conf.local
 alias_policy {
   api_key = "${API_KEY_READ_ONLY}";
   hostname = "${MAILCOW_HOSTNAME}";
-  sync_interval = 300;
+  sync_interval = 60;
 }
 EOF
