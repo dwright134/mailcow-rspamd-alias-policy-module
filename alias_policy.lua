@@ -325,7 +325,6 @@ end
 -------------------------------------------------------------------
 rspamd_config:add_on_load(function(cfg, ev_base, worker)
   if worker:get_type() ~= 'controller' then
-    rspamd_logger.errx(rspamd_config, "%s: worker is not primary controller, skipping API sync setup", N)
     return
   end
 
