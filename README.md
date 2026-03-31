@@ -128,7 +128,7 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
    This applies the environment variables and triggers the setup hook (`alias_policy_setup.sh`), which will:
    - Install `alias_policy.lua` into Rspamd's plugins directory
-   - Refresh the `alias_policy {}` block in `/etc/rspamd/rspamd.conf.local` with API credentials
+   - Write `/etc/rspamd/local.d/alias_policy.conf` with the module options
    - Initialize the policy cache file
 
 ## Environment Variables
@@ -140,14 +140,13 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
 ## Module Configuration
 
-The setup script writes the following configuration block to `/etc/rspamd/rspamd.conf.local`:
+The setup script writes the following configuration to `/etc/rspamd/local.d/alias_policy.conf`:
 
 ```
-alias_policy {
-  api_key = "<your-api-key>";
-  hostname = "<your-hostname>";
-  sync_interval = 60;
-}
+enabled = true;
+api_key = "<your-api-key>";
+hostname = "<your-hostname>";
+sync_interval = 60;
 ```
 
 | Option | Default | Description |
@@ -162,7 +161,7 @@ alias_policy {
 | File | Path | Description |
 |---|---|---|
 | Lua module | `/etc/rspamd/plugins.d/alias_policy.lua` | Rspamd prefilter that syncs and enforces policies |
-| Module config | `/etc/rspamd/rspamd.conf.local` | Generated `alias_policy {}` config block |
+| Module config | `/etc/rspamd/local.d/alias_policy.conf` | Generated per-module Rspamd config |
 | Policy cache | `/etc/rspamd/local.d/list_policies.json` | Cached policy data for cold starts (auto-managed) |
 
 ## Logging
