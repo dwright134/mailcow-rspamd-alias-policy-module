@@ -59,7 +59,7 @@ The `::` separator distinguishes the policy name from the optional comma-separat
 | Moderators Only | `moderatorsonly::user1@example.com,user2@example.com` | Only the listed moderators can send. |
 | Members and Moderators | `membersandmoderatorsonly::user1@example.com,user2@example.com` | Both destination addresses and listed moderators can send. |
 
-Leave `private_comment` empty to keep an alias unrestricted. If the field is empty or contains an unrecognized value, no policy entry is written for that alias, so the module does not enforce a restriction for it.
+Leave `private_comment` empty to keep an alias unrestricted. If the field is empty or contains an unrecognized or invalid value, no policy entry is written for that alias, so the module does not enforce a restriction for it.
 
 If you want to limit an alias to same-domain senders, use the `Internal` checkbox when creating the alias in the Mailcow UI.
 
@@ -83,11 +83,6 @@ private_comment: moderatorsonly::admin@example.com,manager@example.com
 **Allow both members and specific moderators:**
 ```
 private_comment: membersandmoderatorsonly::admin@example.com,manager@example.com
-```
-
-**Members-only with optional moderators for future flexibility:**
-```
-private_comment: membersonly::backup-admin@example.com
 ```
 
 The policy value and email addresses are case-insensitive. Whitespace around moderator emails is trimmed automatically.

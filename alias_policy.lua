@@ -145,6 +145,8 @@ local function parse_aliases(cfg, aliases)
             -- Empty private_comment means no enforced policy for this alias.
           elseif not valid_policies[policy_name] then
             rspamd_logger.errx(rspamd_config, "%s: skipping alias %s with unrecognized policy '%s'", N, address, policy_name)
+          elseif policy_name == "membersonly" and #parts > 1 then
+            rspamd_logger.errx(rspamd_config, "%s: skipping alias %s because membersonly does not accept moderators", N, address)
           else
             -- Members from goto field (comma-separated)
             local members = {}
