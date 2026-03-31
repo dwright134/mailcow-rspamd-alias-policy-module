@@ -11,12 +11,9 @@ fi
 # Install the alias policy module into rspamd's plugins directory
 cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
-# Remove any existing alias_policy block (may be stale or from an older version)
-# and append a fresh one while preserving all other local config.
-touch /etc/rspamd/rspamd.conf.local
-sed -i '/^alias_policy[[:space:]]*{/,/^}/d' /etc/rspamd/rspamd.conf.local
-
-cat <<EOF >>/etc/rspamd/rspamd.conf.local
+# Write a dedicated module config file instead of editing rspamd.conf.local.
+# This avoids in-place rewrite failures on mounted/busy config files.
+cat <<EOF >/etc/rspamd/local.d/alias_policy.conf
 alias_policy {
   api_key = "${API_KEY_READ_ONLY}";
   hostname = "${MAILCOW_HOSTNAME}";
