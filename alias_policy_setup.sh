@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-mkdir -p /etc/rspamd/custom /etc/rspamd/local.d /etc/rspamd/plugins.d
+mkdir -p /etc/rspamd/local.d /etc/rspamd/plugins.d
 
 # Initialize the policy file as empty JSON if it doesn't exist yet
 if [ ! -f /etc/rspamd/local.d/list_policies.json ]; then
@@ -11,9 +11,11 @@ fi
 # Install the alias policy module into rspamd's plugins directory
 cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
-# Configure the custom Lua module using a top-level config file under
-# /etc/rspamd/custom, which Mailcow mounts separately from rspamd.conf.local.
-cat <<EOF >/etc/rspamd/custom/alias_policy.conf
+# Refresh the alias_policy block in rspamd.conf.override.
+touch /etc/rspamd/rspamd.conf.override
+sed -i '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.override
+
+cat <<EOF >>/etc/rspamd/rspamd.conf.override
 alias_policy {
   enabled = true;
   api_key = "${API_KEY_READ_ONLY}";
@@ -21,5 +23,3 @@ alias_policy {
   sync_interval = 60;
 }
 EOF
-
-rm -f /etc/rspamd/local.d/alias_policy.conf
