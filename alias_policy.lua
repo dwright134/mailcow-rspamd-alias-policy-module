@@ -142,7 +142,7 @@ local function parse_aliases(cfg, aliases)
           local policy_name = trim(parts[1] or "")
 
           if policy_name == "" then
-            rspamd_logger.errx(rspamd_config, "%s: skipping alias %s with empty private_comment policy", N, address)
+            -- Empty private_comment means no enforced policy for this alias.
           elseif not valid_policies[policy_name] then
             rspamd_logger.errx(rspamd_config, "%s: skipping alias %s with unrecognized policy '%s'", N, address, policy_name)
           else
