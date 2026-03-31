@@ -61,7 +61,7 @@ The `::` separator distinguishes the policy name from the optional comma-separat
 | Moderators Only | `moderatorsonly::user1@example.com,user2@example.com` | Only the listed moderators can send. |
 | Members and Moderators | `membersandmoderatorsonly::user1@example.com,user2@example.com` | Both destination addresses and listed moderators can send. |
 
-If the `private_comment` field is empty or contains an unrecognized value, the policy defaults to `public`.
+If the `private_comment` field is empty or contains an unrecognized value, no policy entry is written for that alias. The module therefore does not enforce a restriction for it, which remains effectively `public`.
 
 ### Examples
 

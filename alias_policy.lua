@@ -143,40 +143,42 @@ local function parse_aliases(cfg, aliases)
           local parts = split(raw_comment, "::")
           local policy_name = trim(parts[1] or "")
 
-          if not valid_policies[policy_name] then
-            policy_name = "public"
-          end
-
-          -- Members from goto field (comma-separated)
-          local members = {}
-          local goto_str = alias["goto"] or ""
-          if goto_str ~= "" then
-            for _, addr in ipairs(split(goto_str, ",")) do
-              local cleaned = trim(addr):lower()
-              if cleaned ~= "" then
-                members[#members + 1] = cleaned
+          if policy_name == "" then
+            rspamd_logger.errx(rspamd_config, "%s: skipping alias %s with empty private_comment policy", N, address)
+          elseif not valid_policies[policy_name] then
+            rspamd_logger.errx(rspamd_config, "%s: skipping alias %s with unrecognized policy '%s'", N, address, policy_name)
+          else
+            -- Members from goto field (comma-separated)
+            local members = {}
+            local goto_str = alias["goto"] or ""
+            if goto_str ~= "" then
+              for _, addr in ipairs(split(goto_str, ",")) do
+                local cleaned = trim(addr):lower()
+                if cleaned ~= "" then
+                  members[#members + 1] = cleaned
+                end
               end
             end
-          end
 
-          -- Moderators from after :: in private_comment
-          local moderators = {}
-          if #parts > 1 then
-            local mod_str = parts[2] or ""
-            for _, addr in ipairs(split(mod_str, ",")) do
-              local cleaned = trim(addr):lower()
-              if cleaned ~= "" then
-                moderators[#moderators + 1] = cleaned
+            -- Moderators from after :: in private_comment
+            local moderators = {}
+            if #parts > 1 then
+              local mod_str = parts[2] or ""
+              for _, addr in ipairs(split(mod_str, ",")) do
+                local cleaned = trim(addr):lower()
+                if cleaned ~= "" then
+                  moderators[#moderators + 1] = cleaned
+                end
               end
             end
-          end
 
-          output[address] = {
-            policy = policy_name,
-            members = members,
-            moderators = moderators,
-          }
-          count = count + 1
+            output[address] = {
+              policy = policy_name,
+              members = members,
+              moderators = moderators,
+            }
+            count = count + 1
+          end
         end
       end
     end
