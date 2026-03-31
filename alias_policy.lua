@@ -30,7 +30,6 @@ local settings = {
 
 -- Valid policy values
 local valid_policies = {
-  public = true,
   domain = true,
   membersonly = true,
   moderatorsonly = true,
@@ -406,9 +405,7 @@ local function check_policy(task)
       local policy = list.policy
       rspamd_logger.errx(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
 
-      if policy == "public" then
-        rspamd_logger.errx(task, "%s: ALLOW %s -> %s (public)", N, sender, list_addr)
-      elseif policy == "domain" then
+      if policy == "domain" then
         local list_domain = list_addr:match("@(.+)")
         if sender_domain ~= list_domain then
           reject(task, sender, list_addr, "Sender not in same domain")

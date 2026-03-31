@@ -55,19 +55,18 @@ The `::` separator distinguishes the policy name from the optional comma-separat
 
 | Policy | `private_comment` value | Description |
 |---|---|---|
-| Public | `public` | Anyone can send to this alias. |
 | Domain | `domain` | Only senders from the same domain as the alias can send. |
 | Members Only | `membersonly` | Only the alias's destination addresses (goto targets) can send. |
 | Moderators Only | `moderatorsonly::user1@example.com,user2@example.com` | Only the listed moderators can send. |
 | Members and Moderators | `membersandmoderatorsonly::user1@example.com,user2@example.com` | Both destination addresses and listed moderators can send. |
 
-If the `private_comment` field is empty or contains an unrecognized value, no policy entry is written for that alias. The module therefore does not enforce a restriction for it, which remains effectively `public`.
+Leave `private_comment` empty to keep an alias unrestricted. If the field is empty or contains an unrecognized value, no policy entry is written for that alias, so the module does not enforce a restriction for it.
 
 ### Examples
 
 **Allow anyone to send to a newsletter alias:**
 ```
-private_comment: public
+private_comment:
 ```
 
 **Restrict an internal alias to same-domain senders:**
