@@ -30,7 +30,6 @@ local settings = {
 
 -- Valid policy values
 local valid_policies = {
-  domain = true,
   membersonly = true,
   moderatorsonly = true,
   membersandmoderatorsonly = true,
@@ -396,8 +395,6 @@ local function check_policy(task)
     return
   end
   sender = sender[1].addr:lower()
-  local sender_domain = sender:match("@(.+)")
-
   for _, rcpt in ipairs(rcpts) do
     local list_addr = rcpt.addr:lower()
     local list = policies[list_addr]
@@ -405,15 +402,7 @@ local function check_policy(task)
       local policy = list.policy
       rspamd_logger.errx(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
 
-      if policy == "domain" then
-        local list_domain = list_addr:match("@(.+)")
-        if sender_domain ~= list_domain then
-          reject(task, sender, list_addr, "Sender not in same domain")
-          return
-        else
-          rspamd_logger.errx(task, "%s: ALLOW %s -> %s (domain match)", N, sender, list_addr)
-        end
-      elseif policy == "membersonly" then
+      if policy == "membersonly" then
         if not list.members[sender] then
           reject(task, sender, list_addr, "Sender not a member")
           return

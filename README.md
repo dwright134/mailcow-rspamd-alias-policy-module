@@ -55,23 +55,19 @@ The `::` separator distinguishes the policy name from the optional comma-separat
 
 | Policy | `private_comment` value | Description |
 |---|---|---|
-| Domain | `domain` | Only senders from the same domain as the alias can send. |
 | Members Only | `membersonly` | Only the alias's destination addresses (goto targets) can send. |
 | Moderators Only | `moderatorsonly::user1@example.com,user2@example.com` | Only the listed moderators can send. |
 | Members and Moderators | `membersandmoderatorsonly::user1@example.com,user2@example.com` | Both destination addresses and listed moderators can send. |
 
 Leave `private_comment` empty to keep an alias unrestricted. If the field is empty or contains an unrecognized value, no policy entry is written for that alias, so the module does not enforce a restriction for it.
 
+If you want to limit an alias to same-domain senders, use the `Internal` checkbox when creating the alias in the Mailcow UI.
+
 ### Examples
 
 **Allow anyone to send to a newsletter alias:**
 ```
 private_comment:
-```
-
-**Restrict an internal alias to same-domain senders:**
-```
-private_comment: domain
 ```
 
 **Only allow alias members (goto targets) to send:**
@@ -184,7 +180,7 @@ Mailcow sets the Rspamd minimum log level to `error`, so all module logs are wri
 | Policy map reload | Number of policies loaded from the on-disk map file |
 | Policy write decision | Whether the generated policy data changed and whether the cache file was rewritten |
 | ACL check | Sender, recipient, and applicable policy for each message |
-| Decision | ALLOW or REJECT with the reason (member, moderator, domain, etc.) |
+| Decision | ALLOW or REJECT with the reason (member, moderator, etc.) |
 | Errors | API failures, parse errors, file write failures with details |
 
 View logs in the Rspamd container:
