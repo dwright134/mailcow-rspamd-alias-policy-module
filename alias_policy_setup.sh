@@ -11,16 +11,16 @@ fi
 # Install the alias policy module into rspamd's plugins directory
 cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
-# Refresh the alias_policy block in rspamd.conf.override.
-touch /etc/rspamd/rspamd.conf.override
-tmp_override=$(mktemp)
-trap 'rm -f "$tmp_override"' EXIT
-sed '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.override > "$tmp_override"
-cat "$tmp_override" >/etc/rspamd/rspamd.conf.override
-rm -f "$tmp_override"
+# Refresh the alias_policy block in rspamd.conf.local.
+touch /etc/rspamd/rspamd.conf.local
+tmp_local=$(mktemp)
+trap 'rm -f "$tmp_local"' EXIT
+sed '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.local > "$tmp_local"
+cat "$tmp_local" >/etc/rspamd/rspamd.conf.local
+rm -f "$tmp_local"
 trap - EXIT
 
-cat <<EOF >>/etc/rspamd/rspamd.conf.override
+cat <<EOF >>/etc/rspamd/rspamd.conf.local
 alias_policy {
   enabled = true;
   api_key = "${API_KEY_READ_ONLY}";
