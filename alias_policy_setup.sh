@@ -13,7 +13,12 @@ cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 
 # Refresh the alias_policy block in rspamd.conf.override.
 touch /etc/rspamd/rspamd.conf.override
-sed -i '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.override
+tmp_override=$(mktemp)
+trap 'rm -f "$tmp_override"' EXIT
+sed '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.override > "$tmp_override"
+cat "$tmp_override" >/etc/rspamd/rspamd.conf.override
+rm -f "$tmp_override"
+trap - EXIT
 
 cat <<EOF >>/etc/rspamd/rspamd.conf.override
 alias_policy {
