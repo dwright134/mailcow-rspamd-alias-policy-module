@@ -170,15 +170,13 @@ alias_policy {
 
 The module now uses Rspamd log levels based on the kind of event being recorded instead of writing everything at `error`. Each message is still prefixed with `alias_policy:` for easy filtering.
 
-Mailcow commonly runs Rspamd with a minimum log level of `error`, so by default you will only see error-level entries. To see warning, info, or debug entries from this module, lower Rspamd's log threshold accordingly.
+Mailcow commonly runs Rspamd with a minimum log level of `error`, so by default you will only see error-level entries. To see warning or notice entries from this module, lower Rspamd's log threshold accordingly.
 
 | Event | Log Level | What's Logged |
 |---|---|---|
 | Configuration and runtime failures | `error` | Missing required config at startup, map registration failures, API failures, parse failures, and file write failures |
 | Invalid alias policy metadata | `warning` | Aliases skipped because `private_comment` contains an unrecognized policy or an invalid `membersonly` moderator list |
-| Startup and sync lifecycle | `info` | Whether cached policies were reused, whether an initial sync ran, how many policies were parsed from the API, how many were loaded from the map, and when the policy cache file was written |
-| Policy enforcement rejections | `info` | REJECT decisions with sender, recipient, and reason |
-| Verbose sync and enforcement tracing | `debug` | API response size, unchanged policy-cache skips, per-message policy checks, and ALLOW decisions |
+| Startup, sync, and enforcement activity | `notice` | Whether cached policies were reused, whether an initial sync ran, API response size, unchanged policy-cache skips, how many policies were parsed from the API, how many were loaded from the map, when the policy cache file was written, per-message policy checks, ALLOW decisions, and REJECT decisions |
 
 View logs in the Rspamd container:
 ```bash
