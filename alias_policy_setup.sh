@@ -15,16 +15,20 @@ cp /hooks/alias_policy.lua /etc/rspamd/plugins.d/alias_policy.lua
 touch /etc/rspamd/rspamd.conf.local
 tmp_local=$(mktemp)
 trap 'rm -f "$tmp_local"' EXIT
-sed '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.local > "$tmp_local"
+sed '/^[[:space:]]*alias_policy[[:space:]]*{/,/^[[:space:]]*}/d' /etc/rspamd/rspamd.conf.local >"$tmp_local"
 cat "$tmp_local" >/etc/rspamd/rspamd.conf.local
 rm -f "$tmp_local"
 trap - EXIT
 
-cat <<EOF >>/etc/rspamd/rspamd.conf.local
+cat <<'EOF' >>/etc/rspamd/rspamd.conf.local
 alias_policy {
-  enabled = true;
-  api_key = "${API_KEY_READ_ONLY}";
-  hostname = "${MAILCOW_HOSTNAME}";
-  sync_interval = 60;
+  .include(try=true;priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/alias_policy.conf"
 }
+EOF
+
+cat <<EOF >/etc/rspamd/local.d/alias_policy.conf
+enabled = true;
+api_key = "${API_KEY_READ_ONLY}";
+hostname = "${MAILCOW_HOSTNAME}";
+sync_interval = 60;
 EOF
