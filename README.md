@@ -168,17 +168,17 @@ alias_policy {
 
 ## Logging
 
-Mailcow sets the Rspamd minimum log level to `error`, so all module logs are written using `rspamd_config:errx()` regardless of event type. Each message is prefixed with `alias_policy:` for easy filtering.
+The module now uses Rspamd log levels based on the kind of event being recorded instead of writing everything at `error`. Each message is still prefixed with `alias_policy:` for easy filtering.
 
-| Event | What's Logged |
-|---|---|
-| Initial sync | Whether cached policies were found and whether an immediate API sync is triggered |
-| API sync | API response size, parse failures, HTTP failures, and number of policies parsed |
-| Policy map reload | Number of policies loaded from the on-disk map file |
-| Policy write decision | Whether the generated policy data changed and whether the cache file was rewritten |
-| ACL check | Sender, recipient, and applicable policy for each message |
-| Decision | ALLOW or REJECT with the reason (member, moderator, etc.) |
-| Errors | API failures, parse errors, file write failures with details |
+Mailcow commonly runs Rspamd with a minimum log level of `error`, so by default you will only see error-level entries. To see warning, info, or debug entries from this module, lower Rspamd's log threshold accordingly.
+
+| Event | Log Level | What's Logged |
+|---|---|---|
+| Configuration and runtime failures | `error` | Missing required config at startup, map registration failures, API failures, parse failures, and file write failures |
+| Invalid alias policy metadata | `warning` | Aliases skipped because `private_comment` contains an unrecognized policy or an invalid `membersonly` moderator list |
+| Startup and sync lifecycle | `info` | Whether cached policies were reused, whether an initial sync ran, how many policies were parsed from the API, how many were loaded from the map, and when the policy cache file was written |
+| Policy enforcement rejections | `info` | REJECT decisions with sender, recipient, and reason |
+| Verbose sync and enforcement tracing | `debug` | API response size, unchanged policy-cache skips, per-message policy checks, and ALLOW decisions |
 
 View logs in the Rspamd container:
 ```bash
