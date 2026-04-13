@@ -409,6 +409,11 @@ local function add_recipient_candidate(rcpts, rcpt_sources, value, source)
     addr = bracketed
   end
 
+  local orcpt_addr = addr:match("^[^;]+;(.+)$")
+  if orcpt_addr and orcpt_addr:find("@", 1, true) then
+    addr = orcpt_addr
+  end
+
   addr = trim(addr):lower()
   if addr == "" or rcpt_sources[addr] then
     return
@@ -418,6 +423,16 @@ local function add_recipient_candidate(rcpts, rcpt_sources, value, source)
   rcpts[#rcpts + 1] = addr
 end
 
+local function format_recipient_candidates(rcpts, rcpt_sources)
+  local formatted = {}
+
+  for _, rcpt in ipairs(rcpts) do
+    formatted[#formatted + 1] = string.format("%s:%s", rcpt_sources[rcpt] or "unknown", rcpt)
+  end
+
+  return table.concat(formatted, ", ")
+end
+
 local function collect_recipient_candidates(task)
   local rcpts = {}
   local rcpt_sources = {}
@@ -425,14 +440,29 @@ local function collect_recipient_candidates(task)
   -- Deliver-To is the best original-recipient hint when the MTA/proxy provides it.
   add_recipient_candidate(rcpts, rcpt_sources, task:get_request_header("Deliver-To"), "deliver-to")
   add_recipient_candidate(rcpts, rcpt_sources, task:get_principal_recipient(), "principal")
+  add_recipient_candidate(rcpts, rcpt_sources, task:get_request_header("Rcpt"), "request-rcpt")
 
   for _, rcpt in ipairs(task:get_recipients("smtp") or {}) do
     add_recipient_candidate(rcpts, rcpt_sources, rcpt, "smtp")
   end
 
+  for i, args in ipairs(task:get_rcpt_esmtp_args() or {}) do
+    for key, value in pairs(args) do
+      local key_str = tostring(key)
+      local key_lc = key_str:lower()
+      if key_lc:find("orcpt", 1, true) or key_lc:find("orig", 1, true) then
+        add_recipient_candidate(rcpts, rcpt_sources, value,
+          string.format("rcpt-esmtp[%d].%s", i, key_str))
+      end
+    end
+  end
+
   for _, rcpt in ipairs(task:get_recipients("mime") or {}) do
     add_recipient_candidate(rcpts, rcpt_sources, rcpt, "mime")
   end
+
+  add_recipient_candidate(rcpts, rcpt_sources, task:get_header("X-Original-To"), "header:x-original-to")
+  add_recipient_candidate(rcpts, rcpt_sources, task:get_header("Delivered-To"), "header:delivered-to")
 
   return rcpts, rcpt_sources
 end
@@ -489,7 +519,7 @@ local function check_policy(task)
   end
 
   rspamd_logger.messagex(task, "%s: no policy match for %s (recipients=%s)",
-    N, sender, table.concat(rcpts, ", "))
+    N, sender, format_recipient_candidates(rcpts, rcpt_sources))
 end
 
 rspamd_config:register_symbol({
