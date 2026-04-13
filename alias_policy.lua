@@ -386,7 +386,7 @@ local function reject(task, sender, list_addr, msg)
   return true
 end
 
-local function add_recipient_candidate(rcpts, rcpt_sources, value, source)
+local function add_recipient_candidate(rcpts, rcpt_set, value)
   if not value then
     return
   end
@@ -415,56 +415,38 @@ local function add_recipient_candidate(rcpts, rcpt_sources, value, source)
   end
 
   addr = trim(addr):lower()
-  if addr == "" or rcpt_sources[addr] then
+  if addr == "" or rcpt_set[addr] then
     return
   end
 
-  rcpt_sources[addr] = source
+  rcpt_set[addr] = true
   rcpts[#rcpts + 1] = addr
-end
-
-local function format_recipient_candidates(rcpts, rcpt_sources)
-  local formatted = {}
-
-  for _, rcpt in ipairs(rcpts) do
-    formatted[#formatted + 1] = string.format("%s:%s", rcpt_sources[rcpt] or "unknown", rcpt)
-  end
-
-  return table.concat(formatted, ", ")
 end
 
 local function collect_recipient_candidates(task)
   local rcpts = {}
-  local rcpt_sources = {}
+  local rcpt_set = {}
 
-  -- Deliver-To is the best original-recipient hint when the MTA/proxy provides it.
-  add_recipient_candidate(rcpts, rcpt_sources, task:get_request_header("Deliver-To"), "deliver-to")
-  add_recipient_candidate(rcpts, rcpt_sources, task:get_principal_recipient(), "principal")
-  add_recipient_candidate(rcpts, rcpt_sources, task:get_request_header("Rcpt"), "request-rcpt")
-
-  for _, rcpt in ipairs(task:get_recipients("smtp") or {}) do
-    add_recipient_candidate(rcpts, rcpt_sources, rcpt, "smtp")
-  end
-
-  for i, args in ipairs(task:get_rcpt_esmtp_args() or {}) do
+  -- ORCPT is the original-recipient source Mailcow preserves for direct and Bcc alias delivery.
+  for _, args in ipairs(task:get_rcpt_esmtp_args() or {}) do
     for key, value in pairs(args) do
       local key_str = tostring(key)
       local key_lc = key_str:lower()
       if key_lc:find("orcpt", 1, true) or key_lc:find("orig", 1, true) then
-        add_recipient_candidate(rcpts, rcpt_sources, value,
-          string.format("rcpt-esmtp[%d].%s", i, key_str))
+        add_recipient_candidate(rcpts, rcpt_set, value)
       end
     end
   end
 
-  for _, rcpt in ipairs(task:get_recipients("mime") or {}) do
-    add_recipient_candidate(rcpts, rcpt_sources, rcpt, "mime")
+  for _, rcpt in ipairs(task:get_recipients("smtp") or {}) do
+    add_recipient_candidate(rcpts, rcpt_set, rcpt)
   end
 
-  add_recipient_candidate(rcpts, rcpt_sources, task:get_header("X-Original-To"), "header:x-original-to")
-  add_recipient_candidate(rcpts, rcpt_sources, task:get_header("Delivered-To"), "header:delivered-to")
+  for _, rcpt in ipairs(task:get_recipients("mime") or {}) do
+    add_recipient_candidate(rcpts, rcpt_set, rcpt)
+  end
 
-  return rcpts, rcpt_sources
+  return rcpts
 end
 
 local function check_policy(task)
@@ -478,7 +460,7 @@ local function check_policy(task)
   end
 
   sender = sender[1].addr:lower()
-  local rcpts, rcpt_sources = collect_recipient_candidates(task)
+  local rcpts = collect_recipient_candidates(task)
   if #rcpts == 0 then
     return
   end
@@ -488,8 +470,7 @@ local function check_policy(task)
     local list = policies[list_addr]
     if list then
       local policy = list.policy
-      local source = rcpt_sources[list_addr] or "unknown"
-      rspamd_logger.messagex(task, "%s: checking %s -> %s via %s (policy=%s)", N, sender, list_addr, source, policy)
+      rspamd_logger.messagex(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
 
       if policy == "membersonly" then
         if not list.members[sender] then
@@ -517,9 +498,6 @@ local function check_policy(task)
       end
     end
   end
-
-  rspamd_logger.messagex(task, "%s: no policy match for %s (recipients=%s)",
-    N, sender, format_recipient_candidates(rcpts, rcpt_sources))
 end
 
 rspamd_config:register_symbol({
