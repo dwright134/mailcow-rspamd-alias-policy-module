@@ -13,7 +13,7 @@ At runtime, the Lua module has two cooperating parts:
 
 1. **API sync** (primary controller only) -- The primary controller worker fetches aliases from the Mailcow API using rspamd's built-in HTTP client (`rspamd_http`) on a periodic timer (`add_periodic`). Before writing, it computes a hash of the new policy data and compares it against the cached hash. The policy file is only updated if the data has changed. On startup, if cached policies exist from a previous run, the initial sync is skipped.
 
-2. **Policy enforcement** (all workers) -- All workers monitor the policy file via rspamd's map subsystem (`add_map`), which uses inotify/ev_stat to detect changes and pushes updated content to workers automatically. Each incoming message is checked against the in-memory policy table as a high-priority prefilter.
+2. **Policy enforcement** (all workers) -- All workers monitor the policy file via rspamd's map subsystem (`add_map`), which uses inotify/ev_stat to detect changes and pushes updated content to workers automatically. Each incoming message is checked against the in-memory policy table as a high-priority prefilter. For recipient matching, the module prefers the original recipient preserved by Mailcow/Postfix in RCPT ESMTP args (`ORCPT`) and falls back to SMTP and MIME recipients, so both direct-to-alias and Bcc-to-alias delivery paths are enforced.
 
 ```
 Mailcow API (/api/v1/get/alias/all)
@@ -169,6 +169,8 @@ alias_policy {
 ## Logging
 
 The module now uses Rspamd log levels based on the kind of event being recorded instead of writing everything at `error`. Each message is still prefixed with `alias_policy:` for easy filtering.
+
+In Mailcow, successful alias matches are normally driven by the original recipient stored in `ORCPT`, so a policy check may still succeed even when the visible SMTP recipient has already been rewritten to the alias destination mailbox.
 
 Mailcow commonly runs Rspamd with a minimum log level of `error`, so by default you will only see error-level entries. To see warning or notice entries from this module, lower Rspamd's log threshold accordingly.
 
