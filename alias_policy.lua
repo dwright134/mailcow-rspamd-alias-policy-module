@@ -386,23 +386,80 @@ local function reject(task, sender, list_addr, msg)
   return true
 end
 
+local function add_recipient_candidate(rcpts, rcpt_sources, value, source)
+  if not value then
+    return
+  end
+
+  local addr = value
+  if type(addr) == "table" then
+    addr = addr.addr
+  elseif type(addr) == "userdata" and addr.str then
+    addr = addr:str()
+  else
+    addr = tostring(addr)
+  end
+
+  if not addr or addr == "" then
+    return
+  end
+
+  local bracketed = addr:match("<([^>]+)>")
+  if bracketed then
+    addr = bracketed
+  end
+
+  addr = trim(addr):lower()
+  if addr == "" or rcpt_sources[addr] then
+    return
+  end
+
+  rcpt_sources[addr] = source
+  rcpts[#rcpts + 1] = addr
+end
+
+local function collect_recipient_candidates(task)
+  local rcpts = {}
+  local rcpt_sources = {}
+
+  -- Deliver-To is the best original-recipient hint when the MTA/proxy provides it.
+  add_recipient_candidate(rcpts, rcpt_sources, task:get_request_header("Deliver-To"), "deliver-to")
+  add_recipient_candidate(rcpts, rcpt_sources, task:get_principal_recipient(), "principal")
+
+  for _, rcpt in ipairs(task:get_recipients("smtp") or {}) do
+    add_recipient_candidate(rcpts, rcpt_sources, rcpt, "smtp")
+  end
+
+  for _, rcpt in ipairs(task:get_recipients("mime") or {}) do
+    add_recipient_candidate(rcpts, rcpt_sources, rcpt, "mime")
+  end
+
+  return rcpts, rcpt_sources
+end
+
 local function check_policy(task)
   if not next(policies) then
     return
   end
 
   local sender = task:get_from("smtp")
-  local rcpts = task:get_recipients("smtp")
-  if not sender or not rcpts then
+  if not sender or not sender[1] or not sender[1].addr then
     return
   end
+
   sender = sender[1].addr:lower()
+  local rcpts, rcpt_sources = collect_recipient_candidates(task)
+  if #rcpts == 0 then
+    return
+  end
+
   for _, rcpt in ipairs(rcpts) do
-    local list_addr = rcpt.addr:lower()
+    local list_addr = rcpt
     local list = policies[list_addr]
     if list then
       local policy = list.policy
-      rspamd_logger.messagex(task, "%s: checking %s -> %s (policy=%s)", N, sender, list_addr, policy)
+      local source = rcpt_sources[list_addr] or "unknown"
+      rspamd_logger.messagex(task, "%s: checking %s -> %s via %s (policy=%s)", N, sender, list_addr, source, policy)
 
       if policy == "membersonly" then
         if not list.members[sender] then
@@ -430,6 +487,9 @@ local function check_policy(task)
       end
     end
   end
+
+  rspamd_logger.messagex(task, "%s: no policy match for %s (recipients=%s)",
+    N, sender, table.concat(rcpts, ", "))
 end
 
 rspamd_config:register_symbol({
