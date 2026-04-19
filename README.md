@@ -101,20 +101,23 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
 1. Set up the environment variables:
 
-   - Add your read-only API key to `mailcow.conf` in your mailcow-dockerized directory:
-     ```
-     API_KEY_READ_ONLY=<your-read-only-api-key>
-     ```
-     (`MAILCOW_HOSTNAME` is already set in `mailcow.conf`.)
+    - Add your read-only API key to `mailcow.conf` in your mailcow-dockerized directory:
+      ```
+      API_KEY_READ_ONLY=<your-read-only-api-key>
+      ALIAS_POLICY_SYNC_INTERVAL=300
+      ```
+      (`MAILCOW_HOSTNAME` is already set in `mailcow.conf`.)
+      `ALIAS_POLICY_SYNC_INTERVAL` is optional unless you want to override the default.
 
    - Create `docker-compose.override.yml` in your mailcow-dockerized directory to inject variables into the rspamd container:
      ```yaml
-     services:
-       rspamd-mailcow:
-         environment:
-           - MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
-           - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
-     ```
+      services:
+         rspamd-mailcow:
+           environment:
+             - MAILCOW_HOSTNAME=${MAILCOW_HOSTNAME}
+             - API_KEY_READ_ONLY=${API_KEY_READ_ONLY}
+             - ALIAS_POLICY_SYNC_INTERVAL=${ALIAS_POLICY_SYNC_INTERVAL:-300}
+       ```
 
 2. Copy the repo contents into mailcow:
 
@@ -138,6 +141,7 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 |---|---|---|
 | `MAILCOW_HOSTNAME` | Yes | Hostname of the Mailcow instance (already set in `mailcow.conf`) |
 | `API_KEY_READ_ONLY` | Yes | Read-only API key, set in `mailcow.conf` |
+| `ALIAS_POLICY_SYNC_INTERVAL` | No | Sync interval in seconds for alias policy refreshes; defaults to `300` |
 
 ## Module Configuration
 
@@ -149,21 +153,25 @@ alias_policy {
 }
 ```
 
-It then writes the actual module options to `/etc/rspamd/local.d/alias_policy.conf`:
+It then writes the actual module options to `/etc/rspamd/local.d/alias_policy.conf`, using `ALIAS_POLICY_SYNC_INTERVAL` for `sync_interval`:
 
 ```
 enabled = true;
 api_key = "<your-api-key>";
 hostname = "<your-hostname>";
-sync_interval = 60;
+sync_interval = <your-sync-interval>;
 ```
+
+If `ALIAS_POLICY_SYNC_INTERVAL` is unset or empty, the setup hook writes `300`.
 
 | Option | Default | Description |
 |---|---|---|
 | `api_key` | *(required)* | Mailcow read-only API key |
 | `hostname` | *(required)* | Mailcow hostname for API requests |
-| `sync_interval` | `300` in `alias_policy.lua`, `60` in the setup script's generated config | Seconds between API syncs |
+| `sync_interval` | `300` | Seconds between API syncs |
 | `policy_file` | `/etc/rspamd/local.d/list_policies.json` | Path to the disk cache file |
+
+If `ALIAS_POLICY_SYNC_INTERVAL` is set to an invalid non-empty value, the setup hook logs a warning and writes `300` instead.
 
 ## File Locations
 

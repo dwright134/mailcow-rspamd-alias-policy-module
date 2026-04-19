@@ -3,6 +3,12 @@ set -e
 
 mkdir -p /etc/rspamd/local.d /etc/rspamd/plugins.d
 
+sync_interval="${ALIAS_POLICY_SYNC_INTERVAL:-300}"
+if ! [[ "$sync_interval" =~ ^[0-9]+$ ]] || [ "$sync_interval" -le 0 ]; then
+  echo "alias_policy: invalid ALIAS_POLICY_SYNC_INTERVAL='${ALIAS_POLICY_SYNC_INTERVAL}'; expected a positive integer, defaulting to 300" >&2
+  sync_interval="300"
+fi
+
 # Initialize the policy file as empty JSON if it doesn't exist yet
 if [ ! -f /etc/rspamd/local.d/list_policies.json ]; then
   echo '{}' >/etc/rspamd/local.d/list_policies.json
@@ -30,5 +36,5 @@ cat <<EOF >/etc/rspamd/local.d/alias_policy.conf
 enabled = true;
 api_key = "${API_KEY_READ_ONLY}";
 hostname = "${MAILCOW_HOSTNAME}";
-sync_interval = 60;
+sync_interval = ${sync_interval};
 EOF
