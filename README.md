@@ -7,7 +7,7 @@ A lightweight mailing list policy enforcement system for [Mailcow](https://mailc
 This repo contains:
 
 - `alias_policy.lua` - the Rspamd Lua prefilter that syncs and enforces alias policies
-- `alias_policy_setup.sh` - the Mailcow hook script that installs the Lua module and writes the `alias_policy {}` config block on container start
+- `alias_policy_setup.sh` - the Mailcow hook script that installs the Lua module, refreshes the `alias_policy {}` wrapper block, and generates the module config on container start
 
 At runtime, the Lua module has two cooperating parts:
 
@@ -128,8 +128,9 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
    This applies the environment variables and triggers the setup hook (`alias_policy_setup.sh`), which will:
    - Install `alias_policy.lua` into Rspamd's plugins directory
-   - Refresh the `alias_policy {}` block in `/etc/rspamd/rspamd.conf.local`
-   - Initialize the policy cache file
+   - Refresh the `alias_policy {}` wrapper block in `/etc/rspamd/rspamd.conf.local`
+   - Write the module options to `/etc/rspamd/local.d/alias_policy.conf`
+   - Create the policy cache file if it does not already exist
 
 ## Environment Variables
 
@@ -140,15 +141,21 @@ The policy value and email addresses are case-insensitive. Whitespace around mod
 
 ## Module Configuration
 
-The setup script writes the following configuration to `/etc/rspamd/rspamd.conf.local`:
+The setup script writes an include wrapper to `/etc/rspamd/rspamd.conf.local`:
 
 ```
 alias_policy {
-  enabled = true;
-  api_key = "<your-api-key>";
-  hostname = "<your-hostname>";
-  sync_interval = 60;
+  .include(try=true;priority=1,duplicate=merge) "$LOCAL_CONFDIR/local.d/alias_policy.conf"
 }
+```
+
+It then writes the actual module options to `/etc/rspamd/local.d/alias_policy.conf`:
+
+```
+enabled = true;
+api_key = "<your-api-key>";
+hostname = "<your-hostname>";
+sync_interval = 60;
 ```
 
 | Option | Default | Description |
@@ -163,7 +170,8 @@ alias_policy {
 | File | Path | Description |
 |---|---|---|
 | Lua module | `/etc/rspamd/plugins.d/alias_policy.lua` | Rspamd prefilter that syncs and enforces policies |
-| Module config | `/etc/rspamd/rspamd.conf.local` | Generated `alias_policy {}` config block |
+| Include wrapper | `/etc/rspamd/rspamd.conf.local` | Generated `alias_policy {}` block that includes the module config |
+| Module config | `/etc/rspamd/local.d/alias_policy.conf` | Generated module options (`enabled`, `api_key`, `hostname`, `sync_interval`) |
 | Policy cache | `/etc/rspamd/local.d/list_policies.json` | Cached policy data for cold starts (auto-managed) |
 
 ## Logging
